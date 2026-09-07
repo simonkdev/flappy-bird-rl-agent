@@ -1,0 +1,21 @@
+# Hashes of file build rules.
+5e18171dcb484d74c79fbea774066a43 caffeine-gl/external/glfw/CMakeFiles/uninstall
+6887e28810c4d02808be85bb4bea9e32 caffeine-gl/external/glfw/src/CMakeFiles/update_mappings
+fe9e325d1803851ac2cf38c0f1f4445f caffeine-gl/external/glfw/src/fractional-scale-v1-client-protocol-code.h
+ac93642a2c80ecff01770d61af1c2dfa caffeine-gl/external/glfw/src/fractional-scale-v1-client-protocol.h
+bbc32594e08b3c47e0cacd17991fb7ce caffeine-gl/external/glfw/src/idle-inhibit-unstable-v1-client-protocol-code.h
+a53668c80d4b101a63859373d5a01c45 caffeine-gl/external/glfw/src/idle-inhibit-unstable-v1-client-protocol.h
+48dcdee97358e1cb558321b5691f504a caffeine-gl/external/glfw/src/pointer-constraints-unstable-v1-client-protocol-code.h
+f6d008d6cdb622dc1f8f5602c63300ed caffeine-gl/external/glfw/src/pointer-constraints-unstable-v1-client-protocol.h
+6b36bc3220a56fa980a08e7997b06469 caffeine-gl/external/glfw/src/relative-pointer-unstable-v1-client-protocol-code.h
+29921fd7133e405da65dcffedb0d12d2 caffeine-gl/external/glfw/src/relative-pointer-unstable-v1-client-protocol.h
+379eb02c8cf26cb80dc242d371f6f56c caffeine-gl/external/glfw/src/viewporter-client-protocol-code.h
+51ccad9d1caaddedb20fd372bfe60604 caffeine-gl/external/glfw/src/viewporter-client-protocol.h
+ab1d5a7c16c6f211c16afcf1cf52bbdf caffeine-gl/external/glfw/src/wayland-client-protocol-code.h
+0fb98693d82471d303e7af3e7b17b4e5 caffeine-gl/external/glfw/src/wayland-client-protocol.h
+0b0f285c67d1bf3b306b388b1e3e81ba caffeine-gl/external/glfw/src/xdg-activation-v1-client-protocol-code.h
+d46b13c4242e4b04860ea88446984611 caffeine-gl/external/glfw/src/xdg-activation-v1-client-protocol.h
+7daf95cde6a1b4461a32b031fd04c0c2 caffeine-gl/external/glfw/src/xdg-decoration-unstable-v1-client-protocol-code.h
+2e45c18755a438b7b4d83d4bb8b90010 caffeine-gl/external/glfw/src/xdg-decoration-unstable-v1-client-protocol.h
+90f13eb741bfc50513ed52e5ea0f56be caffeine-gl/external/glfw/src/xdg-shell-client-protocol-code.h
+62d03088de4f55194dcc1de5e022a016 caffeine-gl/external/glfw/src/xdg-shell-client-protocol.h

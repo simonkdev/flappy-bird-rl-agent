@@ -1,0 +1,2 @@
+/nix/store/xcnqqnhw9hb4j5rjgds2yjryi8qki5f3-gcc-wrapper-15.2.0/bin/ar qc libflappy_bird_game.a CMakeFiles/flappy_bird_game.dir/src/game/FlappyBirdGame.cpp.o
+/nix/store/xcnqqnhw9hb4j5rjgds2yjryi8qki5f3-gcc-wrapper-15.2.0/bin/ranlib libflappy_bird_game.a
