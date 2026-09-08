@@ -36,7 +36,7 @@ class Critic(tf.keras.Model):
         )
 
     def call(self, observation):
-        x = tf.cast(observation, tf.float32)
+        x = tf.cast(observation, tf.float32) / config.PIXEL_SCALE
 
         x = self.mlp(x)
 
