@@ -1,3 +1,9 @@
+OBS_HEIGHT = 42
+OBS_WIDTH = 42
+OBS_CHANNELS = 1
+FRAME_STACK = 5
+NUM_ACTIONS = 2
+
 CNN_FILTERS = [32, 64, 64]
 CNN_KERNEL_SIZES = [8, 4, 3]
 CNN_STRIDES = [4, 2, 1]
@@ -5,9 +11,27 @@ CNN_STRIDES = [4, 2, 1]
 FC_UNITS = 256
 
 LEARNING_RATE = 3e-4
-
-PIXEL_SCALE = 255.0 # how many possible pixel values, since grayscale we have 256 possible values
-
-CRITIC_HIDDEN_UNITS = [256, 256, 256]
-
 CRITIC_LEARNING_RATE = 3e-4
+
+PIXEL_SCALE = 255.0
+
+# PPO discounting and advantage estimation.
+GAMMA = 0.99
+GAE_LAMBDA = 0.95
+
+# PPO clipped objective settings.
+PPO_CLIP_EPSILON = 0.2
+PPO_EPOCHS = 4
+PPO_MINIBATCH_SIZE = 64
+PPO_ROLLOUT_STEPS = 2048
+
+# Loss weighting.
+ENTROPY_COEFFICIENT = 0.01
+VALUE_LOSS_COEFFICIENT = 0.5
+MAX_GRAD_NORM = 0.5
+
+# Optional early stop threshold for policy updates if KL drifts too far.
+TARGET_KL = 0.03
+
+TOTAL_TIMESTEPS = 1_000_000
+SEED = 42
