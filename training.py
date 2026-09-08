@@ -28,16 +28,35 @@ def summarize_epoch(stats, elapsed_seconds, num_timesteps):
     }
 
 
+def format_validation(prefix, stats):
+    return (
+        f"{prefix}: "
+        f"avg_score={stats['avg_score']:.2f} "
+        f"max_score={stats['max_score']} "
+        f"avg_steps={stats['avg_steps']:.1f} "
+        f"max_steps={stats['max_steps']} "
+        f"target_hits={stats['target_hits']}/{stats['episodes']} "
+        f"scores={stats['scores']}"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Train the Flappy Bird PPO agent.")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--debug-window", action="store_true")
     parser.add_argument("--show-game-window", action="store_true")
+    parser.add_argument("--env-backend", choices=["cpp_vector", "fast", "subprocess"], default=None)
     parser.add_argument("--rollout-steps", type=int, default=None)
     parser.add_argument("--num-envs", type=int, default=None)
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--ppo-epochs", type=int, default=None)
     parser.add_argument("--minibatch-size", type=int, default=None)
+    parser.add_argument("--validate-every", type=int, default=0)
+    parser.add_argument("--validation-episodes", type=int, default=None)
+    parser.add_argument("--validation-max-steps", type=int, default=None)
+    parser.add_argument("--validation-target-score", type=int, default=None)
+    parser.add_argument("--validation-backend", choices=["cpp_vector", "fast", "subprocess"], default="cpp_vector")
+    parser.add_argument("--validate-sim-mismatch", action="store_true")
     args = parser.parse_args()
 
     if args.rollout_steps is not None:
@@ -54,6 +73,7 @@ def main():
     ppo = PPO(
         debug_window=args.debug_window,
         show_game_window=args.show_game_window,
+        env_backend=args.env_backend,
     )
 
     try:
@@ -91,6 +111,29 @@ def main():
                     f"terminated={summary['terminated']}/{len(ppo.last_trajectory_stats)} "
                     f"seconds={summary['seconds']:.2f}"
                 )
+
+                if args.validate_every > 0 and epoch % args.validate_every == 0:
+                    validation_stats = ppo.evaluate_policy(
+                        episodes=args.validation_episodes,
+                        max_steps=args.validation_max_steps,
+                        env_backend=args.validation_backend,
+                        target_score=args.validation_target_score,
+                    )
+                    tqdm.write(format_validation(f"validation[{args.validation_backend}]", validation_stats))
+
+                    if args.validate_sim_mismatch:
+                        mismatch = ppo.validate_sim_mismatch(
+                            episodes=args.validation_episodes,
+                            max_steps=args.validation_max_steps,
+                            target_score=args.validation_target_score,
+                        )
+                        tqdm.write(format_validation("validation[real]", mismatch["real"]))
+                        tqdm.write(format_validation("validation[fast]", mismatch["fast"]))
+                        tqdm.write(
+                            "sim_mismatch: "
+                            f"score_gap={mismatch['score_gap']:.2f} "
+                            f"step_gap={mismatch['step_gap']:.1f}"
+                        )
     finally:
         ppo.close()
 

@@ -2,6 +2,7 @@
 #define FLAPPYENV_HPP
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -17,6 +18,7 @@ struct FlappyEnvConfig {
 	bool debugWindow = false;
 	bool showGameWindow = false;
 	std::optional<unsigned int> seed;
+	std::optional<std::filesystem::path> resourceRoot;
 };
 
 struct FlappyEnvStepResult {

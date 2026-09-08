@@ -28,11 +28,10 @@ private:
 	bool debugEnabled;
 
 	GLuint framebuffer = 0;
-	GLuint colorTexture = 0;
-	GLFWwindow* mainContext = nullptr;
-	GLuint solidProgram = 0;
-	std::vector<std::uint8_t> rgbPixels;
-	std::vector<std::uint8_t> grayscalePixels;
+		GLuint colorTexture = 0;
+		GLFWwindow* mainContext = nullptr;
+		GLuint solidProgram = 0;
+		std::vector<std::uint8_t> grayscalePixels;
 
 	GLFWwindow* debugWindow = nullptr;
 	GLuint debugTexture = 0;
@@ -41,11 +40,13 @@ private:
 	GLuint debugVbo = 0;
 	GLuint debugEbo = 0;
 
-	void createFramebuffer();
-	void createSolidRenderResources();
-	void drawHighContrastScene(FlappyBirdGame& game) const;
-	void drawSolidQuad(const class CaffeineTransformComponent& transform, float gray) const;
-	void createDebugResources(GLFWwindow* sharedContext);
+		void createFramebuffer();
+		void createSolidRenderResources();
+		void drawHighContrastScene(FlappyBirdGame& game) const;
+		void drawSolidQuad(const class CaffeineTransformComponent& transform, float gray) const;
+		void renderCpuObservation(FlappyBirdGame& game);
+		void drawCpuQuad(const class CaffeineTransformComponent& transform, std::uint8_t gray);
+		void createDebugResources(GLFWwindow* sharedContext);
 	void updateDebugWindow();
 	static GLuint compileShader(GLenum type, const char* source);
 	static GLuint createProgram(const char* vertexSource, const char* fragmentSource);

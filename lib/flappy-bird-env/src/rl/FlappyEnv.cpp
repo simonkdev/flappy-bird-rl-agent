@@ -7,10 +7,11 @@ FlappyEnv::FlappyEnv(const FlappyEnvConfig& config)
 	  game(FlappyBirdGameOptions{
 		  .visibleWindow = config.showGameWindow,
 		  .startFullscreen = false,
-		  .persistHighScore = false,
-		  .logResets = false,
-		  .useNullPlatform = !config.debugWindow && !config.showGameWindow,
-	  }) {
+			  .persistHighScore = false,
+			  .logResets = false,
+			  .useNullPlatform = !config.debugWindow && !config.showGameWindow,
+			  .resourceRoot = config.resourceRoot,
+		  }) {
 	if (config.ticksPerStep <= 0) {
 		throw std::invalid_argument("ticksPerStep must be positive");
 	}

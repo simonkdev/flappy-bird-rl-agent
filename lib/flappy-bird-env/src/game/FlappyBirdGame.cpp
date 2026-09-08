@@ -42,7 +42,8 @@ void FlappyBirdGame::init() {
 
 	
 	
-	CaffeineResourceManager::setResourceRoot(CaffeineResourceManager::getExecutablePath() / "resources");
+		CaffeineResourceManager::setResourceRoot(
+			options.resourceRoot.value_or(CaffeineResourceManager::getExecutablePath() / "resources"));
 
 	CaffeineResourceManager::createDefaultMeshes();
 

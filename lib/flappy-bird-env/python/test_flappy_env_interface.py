@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from flappy_env import FlappyEnv
 
 
@@ -12,7 +14,8 @@ def assert_frame(result) -> None:
 
 
 def main() -> None:
-    with FlappyEnv("build_check/flappy_env_server", seed=99) as env:
+    executable = Path(__file__).resolve().parents[1] / "build/flappy_env_server"
+    with FlappyEnv(executable, seed=99) as env:
         first_reset = env.reset_result(seed=99)
         second_reset = env.reset_result(seed=99)
         assert_frame(first_reset)

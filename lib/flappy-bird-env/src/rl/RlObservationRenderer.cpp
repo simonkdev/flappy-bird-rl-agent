@@ -1,6 +1,8 @@
 #include <rl/RlObservationRenderer.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 
@@ -13,14 +15,12 @@
 #include <caffeine-gl/systems/CaffeineRenderingSystem.hpp>
 
 RlObservationRenderer::RlObservationRenderer(const int width, const int height, const bool debugWindow, GLFWwindow* sharedContext)
-	: width(width), height(height), debugEnabled(debugWindow), rgbPixels(static_cast<std::size_t>(width * height * 3)), grayscalePixels(static_cast<std::size_t>(width * height)) {
+	: width(width), height(height), debugEnabled(debugWindow), grayscalePixels(static_cast<std::size_t>(width * height)) {
 	if (width <= 0 || height <= 0) {
 		throw std::invalid_argument("RL observation dimensions must be positive");
 	}
 
 	mainContext = sharedContext;
-	createFramebuffer();
-	createSolidRenderResources();
 	if (debugEnabled) {
 		createDebugResources(sharedContext);
 	}
@@ -47,36 +47,7 @@ RlObservationRenderer::~RlObservationRenderer() {
 }
 
 const std::vector<std::uint8_t>& RlObservationRenderer::render(FlappyBirdGame& game) {
-	game.window->makeContextCurrent();
-
-	GLint previousFramebuffer = 0;
-	GLint previousViewport[4]{};
-	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
-	glGetIntegerv(GL_VIEWPORT, previousViewport);
-
-	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-	glViewport(0, 0, width, height);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	drawHighContrastScene(game);
-
-	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, rgbPixels.data());
-
-	for (int y = 0; y < height; ++y) {
-		const int sourceY = height - 1 - y;
-		for (int x = 0; x < width; ++x) {
-			const std::size_t rgbIndex = static_cast<std::size_t>((sourceY * width + x) * 3);
-			const std::uint8_t r = rgbPixels[rgbIndex];
-			const std::uint8_t g = rgbPixels[rgbIndex + 1];
-			const std::uint8_t b = rgbPixels[rgbIndex + 2];
-			grayscalePixels[static_cast<std::size_t>(y * width + x)] = static_cast<std::uint8_t>((77 * r + 150 * g + 29 * b) >> 8);
-		}
-	}
-
-	glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFramebuffer));
-	glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
+	renderCpuObservation(game);
 
 	if (debugEnabled) {
 		updateDebugWindow();
@@ -174,6 +145,55 @@ void RlObservationRenderer::drawSolidQuad(const CaffeineTransformComponent& tran
 		glm::value_ptr(transform.getModelMatrix()));
 	glUniform1f(glGetUniformLocation(solidProgram, "gray"), gray);
 	CaffeineResourceManager::getMesh("quad").draw();
+}
+
+void RlObservationRenderer::renderCpuObservation(FlappyBirdGame& game) {
+	std::fill(grayscalePixels.begin(), grayscalePixels.end(), 0);
+
+	for (PipePair* pipePair : game.pipePairs) {
+		if (!pipePair || !pipePair->used) {
+			continue;
+		}
+
+		if (game.world.getComponent<CaffeineRenderComponent>(pipePair->bottomPipe).visible) {
+			drawCpuQuad(game.world.getComponent<CaffeineTransformComponent>(pipePair->bottomPipe), 255);
+		}
+		if (game.world.getComponent<CaffeineRenderComponent>(pipePair->topPipe).visible) {
+			drawCpuQuad(game.world.getComponent<CaffeineTransformComponent>(pipePair->topPipe), 255);
+		}
+	}
+
+	drawCpuQuad(game.world.getComponent<CaffeineTransformComponent>(game.bird), 125);
+}
+
+void RlObservationRenderer::drawCpuQuad(const CaffeineTransformComponent& transform, const std::uint8_t gray) {
+	const float halfWidth = transform.size.x * 0.5f;
+	const float halfHeight = transform.size.y * 0.5f;
+	const float radians = glm::radians(transform.rotation);
+	const float cosTheta = std::cos(radians);
+	const float sinTheta = std::sin(radians);
+	const float extentX = std::abs(cosTheta) * halfWidth + std::abs(sinTheta) * halfHeight;
+	const float extentY = std::abs(sinTheta) * halfWidth + std::abs(cosTheta) * halfHeight;
+
+	const int minX = std::max(0, static_cast<int>(std::floor((transform.position.x - extentX) / 1920.0f * width)));
+	const int maxX = std::min(width - 1, static_cast<int>(std::ceil((transform.position.x + extentX) / 1920.0f * width)));
+	const int minY = std::max(0, static_cast<int>(std::floor((1.0f - (transform.position.y + extentY) / 1080.0f) * height)));
+	const int maxY = std::min(height - 1, static_cast<int>(std::ceil((1.0f - (transform.position.y - extentY) / 1080.0f) * height)));
+
+	for (int y = minY; y <= maxY; ++y) {
+		const float worldY = (1.0f - (static_cast<float>(y) + 0.5f) / static_cast<float>(height)) * 1080.0f;
+		for (int x = minX; x <= maxX; ++x) {
+			const float worldX = (static_cast<float>(x) + 0.5f) / static_cast<float>(width) * 1920.0f;
+			const float dx = worldX - transform.position.x;
+			const float dy = worldY - transform.position.y;
+			const float localX = cosTheta * dx + sinTheta * dy;
+			const float localY = -sinTheta * dx + cosTheta * dy;
+
+			if (std::abs(localX) <= halfWidth && std::abs(localY) <= halfHeight) {
+				grayscalePixels[static_cast<std::size_t>(y * width + x)] = gray;
+			}
+		}
+	}
 }
 
 void RlObservationRenderer::createDebugResources(GLFWwindow* sharedContext) {

@@ -19,14 +19,20 @@ GAMMA = 0.99
 
 PPO_CLIP_EPSILON = 0.2
 PPO_EPOCHS = 4
-PPO_MINIBATCH_SIZE = 64
+PPO_MINIBATCH_SIZE = 256
 
 
 # Sampling hyperparameters.
 PPO_ROLLOUT_STEPS = 2048
-NUM_ENVS = 4
+NUM_ENVS = 32
 # Maximum number of steps per trajectory.
 MAX_NUM_STEPS = 200
+
+# Use the real C++ game simulation by default; "fast" is an opt-in approximation.
+TRAIN_ENV_BACKEND = "cpp_vector"
+VALIDATION_EPISODES = 5
+VALIDATION_MAX_STEPS = 300000
+VALIDATION_TARGET_SCORE = 10000
 
 REWARD_STD = 1.0
 REWARD_PASSED_PIPE = 2.5

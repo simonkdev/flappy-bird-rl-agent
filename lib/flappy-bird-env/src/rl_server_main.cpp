@@ -1,35 +1,13 @@
 #include <rl/FlappyEnv.hpp>
 
-#include <cctype>
 #include <iomanip>
 #include <iostream>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 namespace {
-std::string base64Encode(const std::vector<std::uint8_t>& data) {
-	static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-	std::string output;
-	output.reserve(((data.size() + 2) / 3) * 4);
-
-	for (std::size_t i = 0; i < data.size(); i += 3) {
-		const unsigned int a = data[i];
-		const unsigned int b = i + 1 < data.size() ? data[i + 1] : 0;
-		const unsigned int c = i + 2 < data.size() ? data[i + 2] : 0;
-		const unsigned int triple = (a << 16) | (b << 8) | c;
-
-		output.push_back(alphabet[(triple >> 18) & 0x3F]);
-		output.push_back(alphabet[(triple >> 12) & 0x3F]);
-		output.push_back(i + 1 < data.size() ? alphabet[(triple >> 6) & 0x3F] : '=');
-		output.push_back(i + 2 < data.size() ? alphabet[triple & 0x3F] : '=');
-	}
-
-	return output;
-}
-
 void printResult(const char* kind, const FlappyEnvStepResult& result, const int width, const int height) {
 	std::cout << "OK " << kind << ' '
 	          << width << ' '
@@ -41,8 +19,12 @@ void printResult(const char* kind, const FlappyEnvStepResult& result, const int 
 	          << result.score << ' '
 	          << (result.passedPipe ? 1 : 0) << ' '
 	          << std::fixed << std::setprecision(6) << result.simulationTime << ' '
-	          << base64Encode(*result.observation)
+	          << result.observation->size()
 	          << std::endl;
+	std::cout.write(
+		reinterpret_cast<const char*>(result.observation->data()),
+		static_cast<std::streamsize>(result.observation->size()));
+	std::cout.flush();
 }
 
 void printUsage() {

@@ -4,6 +4,7 @@ project(flappy_bird)
 add_subdirectory(caffeine-gl)
 
 set(GLFW_BUILD_X11 OFF CACHE BOOL "" FORCE)
+find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
 
 set(FLAPPY_BIRD_GAME_SOURCES
     src/game/FlappyBirdGame.cpp
@@ -16,6 +17,7 @@ set(FLAPPY_BIRD_GAME_SOURCES
 add_library(flappy_bird_game STATIC
     ${FLAPPY_BIRD_GAME_SOURCES}
 )
+set_target_properties(flappy_bird_game PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_compile_features(flappy_bird_game PUBLIC cxx_std_20)
 
@@ -51,6 +53,42 @@ target_link_libraries(flappy_env_server PRIVATE
         flappy_bird_game
 )
 
+add_executable(flappy_env_vector_server
+    src/rl_vector_server_main.cpp
+    src/rl/FlappyEnv.cpp
+    include/rl/FlappyEnv.hpp
+    src/rl/RlObservationRenderer.cpp
+    include/rl/RlObservationRenderer.hpp
+)
+
+target_compile_features(flappy_env_vector_server PRIVATE cxx_std_20)
+
+target_link_libraries(flappy_env_vector_server PRIVATE
+        flappy_bird_game
+)
+
+Python3_add_library(_native_flappy_env MODULE
+    src/rl_python_module.cpp
+    src/rl/FlappyEnv.cpp
+    include/rl/FlappyEnv.hpp
+    src/rl/RlObservationRenderer.cpp
+    include/rl/RlObservationRenderer.hpp
+)
+
+target_compile_features(_native_flappy_env PRIVATE cxx_std_20)
+
+target_link_libraries(_native_flappy_env PRIVATE
+        flappy_bird_game
+)
+
+target_compile_definitions(_native_flappy_env PRIVATE
+    FLAPPY_BIRD_RESOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/resources"
+)
+
+set_target_properties(_native_flappy_env PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python
+)
+
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_SOURCE_DIR}/resources
@@ -61,4 +99,10 @@ add_custom_command(TARGET flappy_env_server POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_SOURCE_DIR}/resources
     $<TARGET_FILE_DIR:flappy_env_server>/resources
+)
+
+add_custom_command(TARGET flappy_env_vector_server POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/resources
+    $<TARGET_FILE_DIR:flappy_env_vector_server>/resources
 )

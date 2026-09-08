@@ -1,6 +1,9 @@
 #ifndef FLAPPYBIRDGAME_HPP
 #define FLAPPYBIRDGAME_HPP
 
+#include <filesystem>
+#include <optional>
+
 #include <caffeine-gl/base.hpp>
 #include <game/PipePair.hpp>
 #include <systems/PlayerMovementSystem.hpp>
@@ -12,6 +15,7 @@ struct FlappyBirdGameOptions {
 	bool persistHighScore = true;
 	bool logResets = true;
 	bool useNullPlatform = false;
+	std::optional<std::filesystem::path> resourceRoot;
 };
 
 class FlappyBirdGame {

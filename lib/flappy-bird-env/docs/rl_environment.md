@@ -139,4 +139,4 @@ The server reads one command per line:
 - `INFO`
 - `CLOSE`
 
-`RESET` and `STEP` return a single `OK` line containing metadata and a base64-encoded grayscale frame. This protocol is intentionally simple so it can be replaced later with pybind11, sockets, or shared memory if needed.
+`RESET` and `STEP` return one `OK` metadata line ending with the raw frame byte count, followed immediately by that many raw grayscale bytes on stdout. This avoids base64 overhead while keeping the command protocol simple.
