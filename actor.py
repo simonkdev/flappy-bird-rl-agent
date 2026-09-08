@@ -41,21 +41,21 @@ class Actor(tf.keras.Model):
             learning_rate=config.LEARNING_RATE
         )
 
-    def call(self, observation):
+    def call(self, observation, return_probs=False):
         x = tf.cast(observation, tf.float32) / config.PIXEL_SCALE
 
         x = self.cnn(x)
         x = self.fc(x)
 
         logits = self.policy(x)
-
-        return logits
-
-    def forward_prop(self, observation):
-        logits = self.call(observation)
         probabilities = tf.nn.softmax(logits)
+        action, action_prob = self.decide(probabilities)
 
-        return probabilities
+        if return_probs:
+            return probabilities
+        else:
+            return action, action_prob
+
 
     def update(self, loss, tape):
         gradients = tape.gradient(
@@ -66,3 +66,8 @@ class Actor(tf.keras.Model):
         self.optimizer.apply_gradients(
             zip(gradients, self.trainable_variables)
         )
+
+    def decide(self, probabilities):
+        probs_np = np.asarray(probabilities)
+        index = np.random.choice(len(config.NUM_ACTIONS), p=probs_np)
+        return index, float(probs_np[index])
