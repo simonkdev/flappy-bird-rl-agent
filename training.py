@@ -33,14 +33,17 @@ def main():
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--debug-window", action="store_true")
     parser.add_argument("--show-game-window", action="store_true")
-    parser.add_argument("--trajectories", type=int, default=None)
+    parser.add_argument("--rollout-steps", type=int, default=None)
+    parser.add_argument("--num-envs", type=int, default=None)
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--ppo-epochs", type=int, default=None)
     parser.add_argument("--minibatch-size", type=int, default=None)
     args = parser.parse_args()
 
-    if args.trajectories is not None:
-        config.NUM_TRAJECTORIES = args.trajectories
+    if args.rollout_steps is not None:
+        config.PPO_ROLLOUT_STEPS = args.rollout_steps
+    if args.num_envs is not None:
+        config.NUM_ENVS = args.num_envs
     if args.max_steps is not None:
         config.MAX_NUM_STEPS = args.max_steps
     if args.ppo_epochs is not None:
@@ -89,7 +92,7 @@ def main():
                     f"seconds={summary['seconds']:.2f}"
                 )
     finally:
-        ppo.env.close()
+        ppo.close()
 
 
 if __name__ == "__main__":

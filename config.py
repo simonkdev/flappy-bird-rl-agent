@@ -23,8 +23,8 @@ PPO_MINIBATCH_SIZE = 64
 
 
 # Sampling hyperparameters.
-# Number of trajectories to collect per batch.
-NUM_TRAJECTORIES = 100
+PPO_ROLLOUT_STEPS = 2048
+NUM_ENVS = 4
 # Maximum number of steps per trajectory.
 MAX_NUM_STEPS = 200
 

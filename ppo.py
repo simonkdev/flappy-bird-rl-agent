@@ -35,13 +35,18 @@ class PPO:
     def __init__(self, debug_window=False, show_game_window=False):
         self.actor: Actor = Actor(num_actions=config.NUM_ACTIONS)
         self.critic: Critic = Critic()
-        self.env: FlappyEnv = FlappyEnv(
-            width=config.OBS_WIDTH,
-            height=config.OBS_HEIGHT,
-            debug_window=debug_window,
-            show_game_window=show_game_window,
-        )
-        self.framestack_buffer = []
+        self.envs = [
+            FlappyEnv(
+                width=config.OBS_WIDTH,
+                height=config.OBS_HEIGHT,
+                debug_window=debug_window,
+                show_game_window=show_game_window,
+            )
+            for _ in range(config.NUM_ENVS)
+        ]
+        self.env = self.envs[0]
+        self.framestack_buffers = [[] for _ in self.envs]
+        self.framestack_buffer = self.framestack_buffers[0]
         self.last_trajectory_stats = []
 
     def training_epoch(self):
@@ -124,6 +129,10 @@ class PPO:
             for i in range(0, len(timesteps), config.PPO_MINIBATCH_SIZE)
         ]
 
+    def close(self):
+        for env in self.envs:
+            env.close()
+
     def sample_run(self):
         trajectories = self.collect_trajectories()
         timesteps = self.process_trajectories(trajectories)
@@ -174,16 +183,69 @@ class PPO:
     def collect_trajectories(self):
         trajectories = []
         self.last_trajectory_stats = []
-        for i in range(config.NUM_TRAJECTORIES):
-            traj = self.collect_trajectory()
-            trajectories.append(traj)
-            self.last_trajectory_stats.append({
-                "length": len(traj),
-                "reward": sum(timestep.reward for timestep in traj),
-                "pipes": sum(1 for timestep in traj if timestep.reward == config.REWARD_PASSED_PIPE),
-                "terminated": len(traj) < config.MAX_NUM_STEPS,
-            })
+        active_trajectories = [[] for _ in self.envs]
+        current_results = [
+            env.reset_result(seed=random.randint(0, 120))
+            for env in self.envs
+        ]
+        episode_steps = [0 for _ in self.envs]
+        collected_steps = 0
+
+        while collected_steps < config.PPO_ROLLOUT_STEPS:
+            states = [
+                self.framestack(result.observation, episode_steps[i], i)
+                for i, result in enumerate(current_results)
+            ]
+            actions, action_log_probs = self.decide_batch(states)
+            values = tf.squeeze(self.critic(np.stack(states, axis=0)), axis=1).numpy()
+
+            for i, env in enumerate(self.envs):
+                if collected_steps >= config.PPO_ROLLOUT_STEPS:
+                    break
+
+                result = env.step_result(actions[i])
+                if result.terminated:
+                    reward = config.REWARD_DIE
+                elif result.passed_pipe:
+                    reward = config.REWARD_PASSED_PIPE
+                else:
+                    reward = config.REWARD_STD
+
+                active_trajectories[i].append(
+                    timestep(
+                        observed_state=states[i],
+                        action_taken=actions[i],
+                        sampled_log_probability=action_log_probs[i],
+                        reward=reward,
+                        sampled_critic_value=float(values[i]),
+                        reward_to_go=0.0
+                    )
+                )
+                collected_steps += 1
+
+                episode_steps[i] += 1
+                current_results[i] = result
+                if result.terminated or episode_steps[i] >= config.MAX_NUM_STEPS:
+                    trajectories.append(active_trajectories[i])
+                    self.record_trajectory_stats(active_trajectories[i], result.terminated)
+                    active_trajectories[i] = []
+                    current_results[i] = env.reset_result(seed=random.randint(0, 120))
+                    episode_steps[i] = 0
+
+        for trajectory in active_trajectories:
+            if trajectory:
+                trajectories.append(trajectory)
+                self.record_trajectory_stats(trajectory, False)
+
         return trajectories
+
+    def record_trajectory_stats(self, trajectory, terminated):
+        self.last_trajectory_stats.append({
+            "length": len(trajectory),
+            "reward": sum(timestep.reward for timestep in trajectory),
+            "pipes": sum(1 for timestep in trajectory if timestep.reward == config.REWARD_PASSED_PIPE),
+            "terminated": terminated,
+        })
 
     def collect_trajectory(self):
         seed = random.randint(0, 120)
@@ -217,18 +279,19 @@ class PPO:
                 return timesteps
         return timesteps
 
-    def framestack(self, pixels, step):
+    def framestack(self, pixels, step, env_index=0):
         frame = np.frombuffer(pixels, dtype=np.uint8).reshape(
             config.OBS_HEIGHT,
             config.OBS_WIDTH,
             config.OBS_CHANNELS,
         )
+        buffer = self.framestack_buffers[env_index]
         if step == 0:
-            self.framestack_buffer = [frame] * config.FRAME_STACK
+            buffer[:] = [frame] * config.FRAME_STACK
 
-        del self.framestack_buffer[0]
-        self.framestack_buffer.append(frame)
-        return np.concatenate(self.framestack_buffer, axis=-1)
+        del buffer[0]
+        buffer.append(frame)
+        return np.concatenate(buffer, axis=-1)
 
     def decide(self, state):
         logits = self.actor(state[np.newaxis, ...])
@@ -237,6 +300,20 @@ class PPO:
         action = np.random.choice(config.NUM_ACTIONS, p=probabilities)
         return int(action), float(log_probabilities[action].numpy())
 
+    def decide_batch(self, states):
+        logits = self.actor(np.stack(states, axis=0))
+        log_probabilities = tf.nn.log_softmax(logits).numpy()
+        probabilities = np.exp(log_probabilities)
+        actions = [
+            int(np.random.choice(config.NUM_ACTIONS, p=probabilities[i]))
+            for i in range(len(states))
+        ]
+        action_log_probs = [
+            float(log_probabilities[i, action])
+            for i, action in enumerate(actions)
+        ]
+        return actions, action_log_probs
+
     def testdump(self):
         observation = np.random.rand(1, 42, 42, 5)*255
         print(self.actor(observation))
@@ -244,4 +321,7 @@ class PPO:
 
 if __name__ == "__main__":
     ppotest = PPO()
-    ppotest.testdump()
+    try:
+        ppotest.testdump()
+    finally:
+        ppotest.close()
