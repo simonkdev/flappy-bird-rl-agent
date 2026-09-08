@@ -1,5 +1,6 @@
 import argparse
 import time
+import warnings
 
 import config
 from ppo import PPO
@@ -69,6 +70,14 @@ def main():
         config.PPO_EPOCHS = args.ppo_epochs
     if args.minibatch_size is not None:
         config.PPO_MINIBATCH_SIZE = args.minibatch_size
+
+    if config.MAX_NUM_STEPS < 128:
+        warnings.warn(
+            "MAX_NUM_STEPS is below the first-pipe learning horizon. "
+            "This is fine for smoke tests, but real training should use a much larger cap.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
 
     ppo = PPO(
         debug_window=args.debug_window,

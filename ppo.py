@@ -30,6 +30,8 @@ class timestep:
     reward: float
     sampled_critic_value: float
     reward_to_go: float
+    terminated: bool = False
+    next_critic_value: float = 0.0
 
 class PPO:
 #    name: str = ""
@@ -71,6 +73,8 @@ class PPO:
             self.framestack_buffers = [[] for _ in range(config.NUM_ENVS)]
         self.framestack_buffer = self.framestack_buffers[0]
         self.last_trajectory_stats = []
+        self.current_results = None
+        self.episode_steps = None
 
     def training_epoch(self):
         processed_timesteps = self.sample_run()  # python list, 1D with objects in it
@@ -116,7 +120,9 @@ class PPO:
                 ratio * advantages,
                 clipped_ratio * advantages,
             )
-            loss = -tf.reduce_mean(objective)
+            probabilities = tf.exp(log_probabilities)
+            entropy = -tf.reduce_sum(probabilities * log_probabilities, axis=1)
+            loss = -tf.reduce_mean(objective) - (config.PPO_ENTROPY_COEFFICIENT * tf.reduce_mean(entropy))
         gradients = tape.gradient(loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(gradients, self.actor.trainable_variables))
 
@@ -149,7 +155,9 @@ class PPO:
             ratio * advantages,
             clipped_ratio * advantages,
         )
-        return tf.reduce_mean(objective)
+        probabilities = tf.exp(log_probabilities)
+        entropy = -tf.reduce_sum(probabilities * log_probabilities, axis=1)
+        return tf.reduce_mean(objective) + (config.PPO_ENTROPY_COEFFICIENT * tf.reduce_mean(entropy))
 
     def critic_training_run(self, processed_timesteps):
         states, _, _, _, reward_to_go = self.timesteps_to_tensors(processed_timesteps)
@@ -228,19 +236,26 @@ class PPO:
         processed_timesteps = []
 
         for trajectory in trajectories:
-            reward_buffer = 0.0
+            gae_buffer = 0.0
 
             for timestep in reversed(trajectory):
-                reward_to_go = timestep.reward + (config.GAMMA * reward_buffer)
-                reward_buffer = reward_to_go
+                nonterminal = 0.0 if timestep.terminated else 1.0
+                delta = (
+                    timestep.reward
+                    + config.GAMMA * timestep.next_critic_value * nonterminal
+                    - timestep.sampled_critic_value
+                )
+                advantage = delta + config.GAMMA * config.GAE_LAMBDA * nonterminal * gae_buffer
+                gae_buffer = advantage
+                value_target = advantage + timestep.sampled_critic_value
 
                 processed_timesteps.append(
                     processed_timestep(
                         sampled_log_probability=timestep.sampled_log_probability,
-                        advantage=reward_to_go - timestep.sampled_critic_value,
+                        advantage=advantage,
                         observed_state=timestep.observed_state,
                         action_taken=timestep.action_taken,
-                        reward_to_go=reward_to_go,
+                        reward_to_go=value_target,
                         sampled_critic_value=timestep.sampled_critic_value,
                     )
                 )
@@ -272,36 +287,29 @@ class PPO:
         trajectories = []
         self.last_trajectory_stats = []
         active_trajectories = [[] for _ in self.envs]
-        current_results = [
-            env.reset_result(seed=random.randint(0, 120))
-            for env in self.envs
-        ]
-        episode_steps = [0 for _ in self.envs]
+        if self.current_results is None:
+            self.current_results = [
+                env.reset_result(seed=random.randint(0, 120))
+                for env in self.envs
+            ]
+            self.episode_steps = [0 for _ in self.envs]
         collected_steps = 0
 
         while collected_steps < config.PPO_ROLLOUT_STEPS:
             states = [
-                self.framestack(result.observation, episode_steps[i], i)
-                for i, result in enumerate(current_results)
+                self.framestack(result.observation, self.episode_steps[i], i)
+                for i, result in enumerate(self.current_results)
             ]
             actions, action_log_probs = self.decide_batch(states)
             values = tf.squeeze(self.critic(np.stack(states, axis=0)), axis=1).numpy()
 
             for i, env in enumerate(self.envs):
-                if collected_steps >= config.PPO_ROLLOUT_STEPS:
-                    break
                 env.start_step(actions[i])
 
             for i, env in enumerate(self.envs):
-                if collected_steps >= config.PPO_ROLLOUT_STEPS:
-                    break
                 result = env.finish_step()
-                if result.terminated:
-                    reward = config.REWARD_DIE
-                elif result.passed_pipe:
-                    reward = config.REWARD_PASSED_PIPE
-                else:
-                    reward = config.REWARD_STD
+                next_value = 0.0 if result.terminated else self.estimate_next_value(result.observation, i)
+                reward = self.reward_from_result(result)
 
                 active_trajectories[i].append(
                     timestep(
@@ -310,19 +318,21 @@ class PPO:
                         sampled_log_probability=action_log_probs[i],
                         reward=reward,
                         sampled_critic_value=float(values[i]),
-                        reward_to_go=0.0
+                        reward_to_go=0.0,
+                        terminated=result.terminated,
+                        next_critic_value=next_value,
                     )
                 )
                 collected_steps += 1
 
-                episode_steps[i] += 1
-                current_results[i] = result
-                if result.terminated or episode_steps[i] >= config.MAX_NUM_STEPS:
+                self.episode_steps[i] += 1
+                self.current_results[i] = result
+                if result.terminated or self.episode_steps[i] >= config.MAX_NUM_STEPS:
                     trajectories.append(active_trajectories[i])
                     self.record_trajectory_stats(active_trajectories[i], result.terminated)
                     active_trajectories[i] = []
-                    current_results[i] = env.reset_result(seed=random.randint(0, 120))
-                    episode_steps[i] = 0
+                    self.current_results[i] = env.reset_result(seed=random.randint(0, 120))
+                    self.episode_steps[i] = 0
 
         for trajectory in active_trajectories:
             if trajectory:
@@ -335,32 +345,26 @@ class PPO:
         trajectories = []
         self.last_trajectory_stats = []
         active_trajectories = [[] for _ in range(config.NUM_ENVS)]
-        current_results = self.vector_env.reset_all([
-            random.randint(0, 120)
-            for _ in range(config.NUM_ENVS)
-        ])
-        episode_steps = [0 for _ in range(config.NUM_ENVS)]
+        if self.current_results is None:
+            self.current_results = self.vector_env.reset_all([
+                random.randint(0, 120)
+                for _ in range(config.NUM_ENVS)
+            ])
+            self.episode_steps = [0 for _ in range(config.NUM_ENVS)]
         collected_steps = 0
 
         while collected_steps < config.PPO_ROLLOUT_STEPS:
             states = [
-                self.framestack(result.observation, episode_steps[i], i)
-                for i, result in enumerate(current_results)
+                self.framestack(result.observation, self.episode_steps[i], i)
+                for i, result in enumerate(self.current_results)
             ]
             actions, action_log_probs = self.decide_batch(states)
             values = tf.squeeze(self.critic(np.stack(states, axis=0)), axis=1).numpy()
             next_results = self.vector_env.step_batch(actions)
+            next_values = self.estimate_next_values(next_results)
 
             for i, result in enumerate(next_results):
-                if collected_steps >= config.PPO_ROLLOUT_STEPS:
-                    break
-
-                if result.terminated:
-                    reward = config.REWARD_DIE
-                elif result.passed_pipe:
-                    reward = config.REWARD_PASSED_PIPE
-                else:
-                    reward = config.REWARD_STD
+                reward = self.reward_from_result(result)
 
                 active_trajectories[i].append(
                     timestep(
@@ -369,19 +373,21 @@ class PPO:
                         sampled_log_probability=action_log_probs[i],
                         reward=reward,
                         sampled_critic_value=float(values[i]),
-                        reward_to_go=0.0
+                        reward_to_go=0.0,
+                        terminated=result.terminated,
+                        next_critic_value=float(next_values[i]),
                     )
                 )
                 collected_steps += 1
 
-                episode_steps[i] += 1
-                current_results[i] = result
-                if result.terminated or episode_steps[i] >= config.MAX_NUM_STEPS:
+                self.episode_steps[i] += 1
+                self.current_results[i] = result
+                if result.terminated or self.episode_steps[i] >= config.MAX_NUM_STEPS:
                     trajectories.append(active_trajectories[i])
                     self.record_trajectory_stats(active_trajectories[i], result.terminated)
                     active_trajectories[i] = []
-                    current_results[i] = self.vector_env.reset_one(i, seed=random.randint(0, 120))
-                    episode_steps[i] = 0
+                    self.current_results[i] = self.vector_env.reset_one(i, seed=random.randint(0, 120))
+                    self.episode_steps[i] = 0
 
         for trajectory in active_trajectories:
             if trajectory:
@@ -394,9 +400,17 @@ class PPO:
         self.last_trajectory_stats.append({
             "length": len(trajectory),
             "reward": sum(timestep.reward for timestep in trajectory),
-            "pipes": sum(1 for timestep in trajectory if timestep.reward == config.REWARD_PASSED_PIPE),
+            "pipes": sum(1 for timestep in trajectory if timestep.reward >= config.REWARD_PASSED_PIPE),
             "terminated": terminated,
         })
+
+    @staticmethod
+    def reward_from_result(result):
+        if result.terminated:
+            return config.REWARD_DIE
+        if result.passed_pipe:
+            return config.REWARD_PASSED_PIPE
+        return config.REWARD_STD
 
     def collect_trajectory(self):
         seed = random.randint(0, 120)
@@ -409,21 +423,17 @@ class PPO:
             action, action_log_prob = self.decide(state)
             critic_value = float(self.critic(state[np.newaxis, ...])[0, 0].numpy())
             result = self.env.step_result(action)
-            passed = result.passed_pipe
             terminated = result.terminated
-            if terminated:
-                reward = config.REWARD_DIE
-            elif passed:
-                reward = config.REWARD_PASSED_PIPE
-            else:
-                reward = config.REWARD_STD
+            reward = self.reward_from_result(result)
             current_timestep = timestep(
                 observed_state=state,
                 action_taken=action,
                 sampled_log_probability=action_log_prob,
                 reward=reward,
                 sampled_critic_value=critic_value,
-                reward_to_go=0.0
+                reward_to_go=0.0,
+                terminated=terminated,
+                next_critic_value=0.0 if terminated else self.estimate_next_value(result.observation, 0),
             )
             timesteps.append(current_timestep)
             if terminated:
@@ -443,6 +453,34 @@ class PPO:
         del buffer[0]
         buffer.append(frame)
         return np.concatenate(buffer, axis=-1)
+
+    def estimate_next_values(self, results):
+        states = [
+            self.peek_framestack(result.observation, i)
+            for i, result in enumerate(results)
+        ]
+        values = tf.squeeze(self.critic(np.stack(states, axis=0)), axis=1).numpy()
+        return [
+            0.0 if result.terminated else float(values[i])
+            for i, result in enumerate(results)
+        ]
+
+    def estimate_next_value(self, pixels, env_index=0):
+        state = self.peek_framestack(pixels, env_index)
+        return float(self.critic(state[np.newaxis, ...])[0, 0].numpy())
+
+    def peek_framestack(self, pixels, env_index=0):
+        frame = np.frombuffer(pixels, dtype=np.uint8).reshape(
+            config.OBS_HEIGHT,
+            config.OBS_WIDTH,
+            config.OBS_CHANNELS,
+        )
+        buffer = self.framestack_buffers[env_index]
+        if not buffer:
+            frames = [frame] * config.FRAME_STACK
+        else:
+            frames = buffer[1:] + [frame]
+        return np.concatenate(frames, axis=-1)
 
     def decide(self, state):
         logits = self.actor(state[np.newaxis, ...])
