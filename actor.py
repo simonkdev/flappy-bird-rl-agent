@@ -48,13 +48,10 @@ class Actor(tf.keras.Model):
         x = self.fc(x)
 
         logits = self.policy(x)
-        probabilities = tf.nn.softmax(logits)
-        action, action_prob = self.decide(probabilities)
 
         if return_probs:
-            return probabilities
-        else:
-            return action, action_prob
+            return tf.nn.softmax(logits)
+        return logits
 
 
     def update(self, loss, tape):
@@ -66,8 +63,3 @@ class Actor(tf.keras.Model):
         self.optimizer.apply_gradients(
             zip(gradients, self.trainable_variables)
         )
-
-    def decide(self, probabilities):
-        probs_np = np.asarray(probabilities)
-        index = np.random.choice(len(config.NUM_ACTIONS), p=probs_np)
-        return index, float(probs_np[index])
