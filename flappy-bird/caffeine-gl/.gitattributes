@@ -1,3 +1,0 @@
-src/glad.c linguist-vendored
-include/glad/glad.h linguist-vendored
-include/KHR/khrplatform.h linguist-vendored
