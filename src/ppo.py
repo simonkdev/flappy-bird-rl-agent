@@ -34,7 +34,12 @@ class PPO:
         self.actor: Actor = Actor(num_actions=config.NUM_ACTIONS)
         self.critic: Critic = Critic()
         self.env_backend = env_backend or config.TRAIN_ENV_BACKEND
-        if debug_window or show_game_window or config.NUM_ENVS == 1 or self.env_backend == "subprocess":
+        if (
+            debug_window
+            or show_game_window
+            or config.NUM_ENVS == 1
+            or self.env_backend == "subprocess"
+        ):
             self.vector_env = None
             self.envs = [
                 FlappyEnv(
@@ -84,7 +89,9 @@ class PPO:
         return processed_timesteps
 
     def actor_training_run(self, processed_timesteps):
-        states, actions, old_log_probs, advantages, _ = self.timesteps_to_tensors(processed_timesteps)
+        states, actions, old_log_probs, advantages, _ = self.timesteps_to_tensors(
+            processed_timesteps
+        )
         indices = np.arange(len(processed_timesteps))
         metrics = []
         early_stopped = False
@@ -171,7 +178,10 @@ class PPO:
             predictions.extend(tf.squeeze(self.critic(batch_states), axis=1).numpy())
         targets = reward_to_go.numpy()
         target_variance = np.var(targets)
-        explained_variance = 0.0 if target_variance < 1e-8 else 1.0 - np.var(targets - predictions) / target_variance
+        if target_variance < 1e-8:
+            explained_variance = 0.0
+        else:
+            explained_variance = 1.0 - np.var(targets - predictions) / target_variance
         return {
             "value_loss": float(np.mean(losses)),
             "explained_variance": float(explained_variance),
@@ -296,7 +306,11 @@ class PPO:
 
             for i, env in enumerate(self.envs):
                 result = env.finish_step()
-                next_value = 0.0 if result.terminated else self.estimate_next_value(result.observation, i)
+                next_value = (
+                    0.0
+                    if result.terminated
+                    else self.estimate_next_value(result.observation, i)
+                )
                 reward = self.reward_from_transition(result)
 
                 active_trajectories[i].append(
@@ -374,7 +388,10 @@ class PPO:
                     trajectories.append(active_trajectories[i])
                     self.record_trajectory_stats(active_trajectories[i], result.terminated)
                     active_trajectories[i] = []
-                    self.current_results[i] = self.vector_env.reset_one(i, seed=random.randint(0, 120))
+                    self.current_results[i] = self.vector_env.reset_one(
+                        i,
+                        seed=random.randint(0, 120),
+                    )
                     self.episode_steps[i] = 0
 
         for trajectory in active_trajectories:
@@ -465,7 +482,14 @@ class PPO:
         action_log_probs = tf.gather_nd(log_probabilities, indices)
         return actions.numpy().astype(int).tolist(), action_log_probs.numpy().astype(float).tolist()
 
-    def evaluate_policy(self, episodes=None, max_steps=None, env_backend="cpp_vector", deterministic=True, target_score=None):
+    def evaluate_policy(
+        self,
+        episodes=None,
+        max_steps=None,
+        env_backend="cpp_vector",
+        deterministic=True,
+        target_score=None,
+    ):
         episodes = episodes or config.VALIDATION_EPISODES
         max_steps = max_steps or config.VALIDATION_MAX_STEPS
         target_score = config.VALIDATION_TARGET_SCORE if target_score is None else target_score
@@ -495,10 +519,21 @@ class PPO:
                 target_score,
             )
         if env_backend == "subprocess":
-            return self._evaluate_subprocess_policy(episodes, max_steps, deterministic, target_score)
+            return self._evaluate_subprocess_policy(
+                episodes,
+                max_steps,
+                deterministic,
+                target_score,
+            )
         raise ValueError(f"Unsupported validation env_backend: {env_backend!r}")
 
-    def validate_sim_mismatch(self, episodes=None, max_steps=None, deterministic=True, target_score=None):
+    def validate_sim_mismatch(
+        self,
+        episodes=None,
+        max_steps=None,
+        deterministic=True,
+        target_score=None,
+    ):
         real_stats = self.evaluate_policy(
             episodes=episodes,
             max_steps=max_steps,
@@ -534,7 +569,10 @@ class PPO:
                     self.stack_frame_with_buffer(results[i].observation, steps[i], buffers[i])
                     for i in active_indices
                 ]
-                actions = self.decide_batch_deterministic(states) if deterministic else self.decide_batch(states)[0]
+                if deterministic:
+                    actions = self.decide_batch_deterministic(states)
+                else:
+                    actions = self.decide_batch(states)[0]
                 batch_actions = [0 for _ in range(episodes)]
                 for index, action in zip(active_indices, actions):
                     batch_actions[index] = action
@@ -545,7 +583,11 @@ class PPO:
                     results[index] = result
                     steps[index] += 1
                     scores[index] = result.score
-                    if result.terminated or steps[index] >= max_steps or result.score >= target_score:
+                    if (
+                        result.terminated
+                        or steps[index] >= max_steps
+                        or result.score >= target_score
+                    ):
                         finished[index] = True
 
             return self._summarize_evaluation(scores, steps, target_score)
@@ -564,7 +606,10 @@ class PPO:
                 step_count = 0
                 for step in range(max_steps):
                     state = self.stack_frame_with_buffer(result.observation, step, buffer)
-                    action = self.decide_deterministic(state) if deterministic else self.decide(state)[0]
+                    if deterministic:
+                        action = self.decide_deterministic(state)
+                    else:
+                        action = self.decide(state)[0]
                     result = env.step_result(action)
                     score = result.score
                     step_count = step + 1
