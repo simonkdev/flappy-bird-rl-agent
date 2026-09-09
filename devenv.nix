@@ -49,6 +49,7 @@
         --num-envs 32 \
         --ppo-epochs 4 \
         --minibatch-size 512 \
+        --target-kl 0.015 \
         --entropy-start 0.01 \
         --entropy-end 0.001 \
         --entropy-decay-epochs 150 \
@@ -58,7 +59,7 @@
         --validation-target-score 500 \
         --checkpoint-dir checkpoints/validate-training \
         --checkpoint-every 25 \
-        --resume-from checkpoints/validate-training/best/ckpt-130
+        --resume-from checkpoints/validate-training/latest/ckpt-201
     '';
   };
 
