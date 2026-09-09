@@ -29,6 +29,11 @@ struct FlappyEnvStepResult {
 	int score = 0;
 	bool passedPipe = false;
 	float simulationTime = 0.0f;
+	bool hasNextPipe = false;
+	float birdY = 0.0f;
+	float nextPipeX = 0.0f;
+	float nextGapCenterY = 0.0f;
+	float nextGapHalfHeight = 0.0f;
 };
 
 class FlappyEnv {

@@ -36,6 +36,9 @@ def main() -> None:
             high_contrast = env.step_result(action)
             if max(high_contrast.observation) == 255:
                 saw_pipe_pixels = True
+                assert high_contrast.has_next_pipe
+                assert high_contrast.next_pipe_x > 0.0
+                assert high_contrast.next_gap_half_height > 0.0
                 break
             if high_contrast.terminated:
                 break

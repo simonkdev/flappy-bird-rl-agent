@@ -217,6 +217,21 @@ class FastVectorFlappyEnv:
             frame[min_y:max_y + 1, min_x:max_x + 1] = gray
 
     def _make_result(self, env_index: int, observation: bytes, reward: float, passed_pipe: bool) -> StepResult:
+        available_pipes = self.pipe_used[env_index] & ~self.pipe_scored[env_index]
+        has_next_pipe = bool(np.any(available_pipes))
+        next_pipe_x = 0.0
+        next_gap_center_y = 0.0
+        next_gap_half_height = 0.0
+        if has_next_pipe:
+            pipe_index = int(np.argmin(np.where(available_pipes, self.pipe_x[env_index], np.inf)))
+            next_pipe_x = float(self.pipe_x[env_index, pipe_index])
+            next_gap_center_y = float(
+                (self.bottom_y[env_index, pipe_index] + self.top_y[env_index, pipe_index]) / 2.0
+            )
+            next_gap_half_height = max(
+                0.0,
+                float((self.top_y[env_index, pipe_index] - self.bottom_y[env_index, pipe_index]) / 2.0 - self.bird_h / 2.0),
+            )
         return StepResult(
             observation=observation,
             width=self.width,
@@ -228,6 +243,11 @@ class FastVectorFlappyEnv:
             score=int(self.score[env_index]),
             passed_pipe=passed_pipe,
             simulation_time=float(self.simulation_time[env_index]),
+            has_next_pipe=has_next_pipe,
+            bird_y=float(self.bird_y[env_index]),
+            next_pipe_x=next_pipe_x,
+            next_gap_center_y=next_gap_center_y,
+            next_gap_half_height=next_gap_half_height,
         )
 
     def _check_env_index(self, env_index: int) -> None:

@@ -42,4 +42,5 @@ VALIDATION_TARGET_SCORE = 10000
 # Reward scale favors actual score progress over merely surviving rollout fragments.
 REWARD_STD = 0.01
 REWARD_PASSED_PIPE = 10.0
-REWARD_DIE = -10.0
+REWARD_DIE = -1.0
+REWARD_ALIGNMENT_SHAPING_COEFFICIENT = 0.5

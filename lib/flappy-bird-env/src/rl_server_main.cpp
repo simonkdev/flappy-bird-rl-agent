@@ -19,6 +19,11 @@ void printResult(const char* kind, const FlappyEnvStepResult& result, const int 
 	          << result.score << ' '
 	          << (result.passedPipe ? 1 : 0) << ' '
 	          << std::fixed << std::setprecision(6) << result.simulationTime << ' '
+	          << (result.hasNextPipe ? 1 : 0) << ' '
+	          << std::fixed << std::setprecision(6) << result.birdY << ' '
+	          << std::fixed << std::setprecision(6) << result.nextPipeX << ' '
+	          << std::fixed << std::setprecision(6) << result.nextGapCenterY << ' '
+	          << std::fixed << std::setprecision(6) << result.nextGapHalfHeight << ' '
 	          << result.observation->size()
 	          << std::endl;
 	std::cout.write(

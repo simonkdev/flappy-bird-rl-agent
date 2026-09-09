@@ -30,6 +30,7 @@ class timestep:
     reward: float
     sampled_critic_value: float
     reward_to_go: float
+    passed_pipe: bool = False
     terminated: bool = False
     next_critic_value: float = 0.0
 
@@ -363,7 +364,7 @@ class PPO:
             for i, env in enumerate(self.envs):
                 result = env.finish_step()
                 next_value = 0.0 if result.terminated else self.estimate_next_value(result.observation, i)
-                reward = self.reward_from_result(result)
+                reward = self.reward_from_transition(self.current_results[i], result)
 
                 active_trajectories[i].append(
                     timestep(
@@ -373,6 +374,7 @@ class PPO:
                         reward=reward,
                         sampled_critic_value=float(values[i]),
                         reward_to_go=0.0,
+                        passed_pipe=result.passed_pipe,
                         terminated=result.terminated,
                         next_critic_value=next_value,
                     )
@@ -418,7 +420,7 @@ class PPO:
             next_values = self.estimate_next_values(next_results)
 
             for i, result in enumerate(next_results):
-                reward = self.reward_from_result(result)
+                reward = self.reward_from_transition(self.current_results[i], result)
 
                 active_trajectories[i].append(
                     timestep(
@@ -428,6 +430,7 @@ class PPO:
                         reward=reward,
                         sampled_critic_value=float(values[i]),
                         reward_to_go=0.0,
+                        passed_pipe=result.passed_pipe,
                         terminated=result.terminated,
                         next_critic_value=float(next_values[i]),
                     )
@@ -454,17 +457,31 @@ class PPO:
         self.last_trajectory_stats.append({
             "length": len(trajectory),
             "reward": sum(timestep.reward for timestep in trajectory),
-            "pipes": sum(1 for timestep in trajectory if timestep.reward >= config.REWARD_PASSED_PIPE),
+            "pipes": sum(timestep.passed_pipe for timestep in trajectory),
             "terminated": terminated,
         })
 
     @staticmethod
-    def reward_from_result(result):
+    def navigation_potential(result):
+        if result.terminated or not result.has_next_pipe or result.next_gap_half_height <= 0.0:
+            return 0.0
+        normalized_distance = abs(result.bird_y - result.next_gap_center_y) / result.next_gap_half_height
+        return max(0.0, 1.0 - min(1.0, normalized_distance))
+
+    @classmethod
+    def reward_from_transition(cls, previous_result, result):
         if result.terminated:
-            return config.REWARD_DIE
-        if result.passed_pipe:
-            return config.REWARD_PASSED_PIPE
-        return config.REWARD_STD
+            base_reward = config.REWARD_DIE
+        elif result.passed_pipe:
+            base_reward = config.REWARD_PASSED_PIPE
+        else:
+            base_reward = config.REWARD_STD
+
+        shaping_reward = config.REWARD_ALIGNMENT_SHAPING_COEFFICIENT * (
+            config.GAMMA * cls.navigation_potential(result)
+            - cls.navigation_potential(previous_result)
+        )
+        return base_reward + shaping_reward
 
     def collect_trajectory(self):
         seed = random.randint(0, 120)
@@ -476,9 +493,9 @@ class PPO:
             state = self.framestack(pixels, step)
             action, action_log_prob = self.decide(state)
             critic_value = float(self.critic(state[np.newaxis, ...])[0, 0].numpy())
-            result = self.env.step_result(action)
-            terminated = result.terminated
-            reward = self.reward_from_result(result)
+            next_result = self.env.step_result(action)
+            terminated = next_result.terminated
+            reward = self.reward_from_transition(result, next_result)
             current_timestep = timestep(
                 observed_state=state,
                 action_taken=action,
@@ -486,12 +503,14 @@ class PPO:
                 reward=reward,
                 sampled_critic_value=critic_value,
                 reward_to_go=0.0,
+                passed_pipe=next_result.passed_pipe,
                 terminated=terminated,
-                next_critic_value=0.0 if terminated else self.estimate_next_value(result.observation, 0),
+                next_critic_value=0.0 if terminated else self.estimate_next_value(next_result.observation, 0),
             )
             timesteps.append(current_timestep)
             if terminated:
                 return timesteps
+            result = next_result
         return timesteps
 
     def framestack(self, pixels, step, env_index=0):

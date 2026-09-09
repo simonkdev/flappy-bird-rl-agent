@@ -134,7 +134,7 @@ class VectorFlappyEnv:
             raise RuntimeError(f"Unexpected vector server response: {line!r}")
 
         count = int(parts[2])
-        expected_header_values = 3 + (count * 10)
+        expected_header_values = 3 + (count * 15)
         if len(parts) != expected_header_values:
             raise RuntimeError(f"Unexpected vector server header length: {line!r}")
 
@@ -151,10 +151,15 @@ class VectorFlappyEnv:
             score = int(parts[cursor + 6])
             passed_pipe = parts[cursor + 7] == "1"
             simulation_time = float(parts[cursor + 8])
-            size = int(parts[cursor + 9])
-            headers.append((width, height, dtype, reward, terminated, alive, score, passed_pipe, simulation_time, size))
+            has_next_pipe = parts[cursor + 9] == "1"
+            bird_y = float(parts[cursor + 10])
+            next_pipe_x = float(parts[cursor + 11])
+            next_gap_center_y = float(parts[cursor + 12])
+            next_gap_half_height = float(parts[cursor + 13])
+            size = int(parts[cursor + 14])
+            headers.append((width, height, dtype, reward, terminated, alive, score, passed_pipe, simulation_time, has_next_pipe, bird_y, next_pipe_x, next_gap_center_y, next_gap_half_height, size))
             payload_size += size
-            cursor += 10
+            cursor += 15
 
         payload = self._process.stdout.read(payload_size)
         if len(payload) != payload_size:
@@ -162,7 +167,7 @@ class VectorFlappyEnv:
 
         results = []
         offset = 0
-        for width, height, dtype, reward, terminated, alive, score, passed_pipe, simulation_time, size in headers:
+        for width, height, dtype, reward, terminated, alive, score, passed_pipe, simulation_time, has_next_pipe, bird_y, next_pipe_x, next_gap_center_y, next_gap_half_height, size in headers:
             observation = payload[offset:offset + size]
             offset += size
             if len(observation) != width * height:
@@ -179,6 +184,11 @@ class VectorFlappyEnv:
                     score=score,
                     passed_pipe=passed_pipe,
                     simulation_time=simulation_time,
+                    has_next_pipe=has_next_pipe,
+                    bird_y=bird_y,
+                    next_pipe_x=next_pipe_x,
+                    next_gap_center_y=next_gap_center_y,
+                    next_gap_half_height=next_gap_half_height,
                 )
             )
 
