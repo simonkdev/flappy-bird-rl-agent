@@ -157,6 +157,7 @@ def main():
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--ppo-epochs", type=int, default=None)
     parser.add_argument("--minibatch-size", type=int, default=None)
+    parser.add_argument("--target-kl", type=float, default=None)
     parser.add_argument("--entropy-start", type=float, default=None)
     parser.add_argument("--entropy-end", type=float, default=None)
     parser.add_argument("--entropy-decay-epochs", type=int, default=None)
@@ -183,6 +184,8 @@ def main():
         config.PPO_EPOCHS = args.ppo_epochs
     if args.minibatch_size is not None:
         config.PPO_MINIBATCH_SIZE = args.minibatch_size
+    if args.target_kl is not None:
+        config.PPO_TARGET_KL = args.target_kl
     if args.entropy_start is not None:
         config.PPO_ENTROPY_COEFFICIENT_START = args.entropy_start
     if args.entropy_end is not None:
@@ -252,6 +255,8 @@ def main():
                     "kl": format_float(metrics["approx_kl"]),
                     "clip": format_float(metrics["clip_fraction"]),
                     "ev": format_float(metrics["explained_variance"]),
+                    "passes": metrics["ppo_passes"],
+                    "kl_stop": metrics["early_stop"],
                     "sec": format_float(summary["seconds"]),
                 })
 
@@ -268,6 +273,8 @@ def main():
                     f"actor_entropy={metrics['actor_entropy']:.4f} "
                     f"approx_kl={metrics['approx_kl']:.5f} "
                     f"clip_fraction={metrics['clip_fraction']:.3f} "
+                    f"ppo_passes={metrics['ppo_passes']} "
+                    f"kl_early_stop={metrics['early_stop']} "
                     f"policy_loss={metrics['policy_loss']:.4f} "
                     f"value_loss={metrics['value_loss']:.4f} "
                     f"explained_variance={metrics['explained_variance']:.3f} "

@@ -96,9 +96,12 @@ class PPO:
         states, actions, old_log_probs, advantages, _ = self.timesteps_to_tensors(processed_timesteps)
         indices = np.arange(len(processed_timesteps))
         metrics = []
+        early_stopped = False
+        completed_passes = 0
 
         for _ in range(config.PPO_EPOCHS):
             np.random.shuffle(indices)
+            pass_kls = []
             for start in range(0, len(indices), config.PPO_MINIBATCH_SIZE):
                 batch_indices = indices[start:start + config.PPO_MINIBATCH_SIZE]
                 batch_metrics = self.actor_training_step_tensors(
@@ -108,6 +111,12 @@ class PPO:
                     tf.gather(advantages, batch_indices),
                 )
                 metrics.append([float(metric.numpy()) for metric in batch_metrics])
+                pass_kls.append(float(batch_metrics[2].numpy()))
+
+            completed_passes += 1
+            if np.mean(pass_kls) >= config.PPO_TARGET_KL:
+                early_stopped = True
+                break
 
         policy_loss, entropy, approx_kl, clip_fraction = np.mean(metrics, axis=0)
         return {
@@ -115,6 +124,8 @@ class PPO:
             "actor_entropy": float(entropy),
             "approx_kl": float(approx_kl),
             "clip_fraction": float(clip_fraction),
+            "ppo_passes": completed_passes,
+            "early_stop": early_stopped,
         }
 
     def actor_training_step(self,batch):
