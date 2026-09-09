@@ -73,29 +73,49 @@ class PPO:
             self.framestack_buffers = [[] for _ in range(config.NUM_ENVS)]
         self.framestack_buffer = self.framestack_buffers[0]
         self.last_trajectory_stats = []
+        self.last_training_metrics = {}
         self.current_results = None
         self.episode_steps = None
+        self.entropy_coefficient = tf.Variable(
+            config.PPO_ENTROPY_COEFFICIENT_START,
+            dtype=tf.float32,
+            trainable=False,
+        )
+
+    def set_entropy_coefficient(self, value):
+        self.entropy_coefficient.assign(float(value))
 
     def training_epoch(self):
         processed_timesteps = self.sample_run()  # python list, 1D with objects in it
-        self.actor_training_run(processed_timesteps)
-        self.critic_training_run(processed_timesteps)
+        actor_metrics = self.actor_training_run(processed_timesteps)
+        critic_metrics = self.critic_training_run(processed_timesteps)
+        self.last_training_metrics = actor_metrics | critic_metrics
         return processed_timesteps
 
     def actor_training_run(self, processed_timesteps):
         states, actions, old_log_probs, advantages, _ = self.timesteps_to_tensors(processed_timesteps)
         indices = np.arange(len(processed_timesteps))
+        metrics = []
 
         for _ in range(config.PPO_EPOCHS):
             np.random.shuffle(indices)
             for start in range(0, len(indices), config.PPO_MINIBATCH_SIZE):
                 batch_indices = indices[start:start + config.PPO_MINIBATCH_SIZE]
-                self.actor_training_step_tensors(
+                batch_metrics = self.actor_training_step_tensors(
                     tf.gather(states, batch_indices),
                     tf.gather(actions, batch_indices),
                     tf.gather(old_log_probs, batch_indices),
                     tf.gather(advantages, batch_indices),
                 )
+                metrics.append([float(metric.numpy()) for metric in batch_metrics])
+
+        policy_loss, entropy, approx_kl, clip_fraction = np.mean(metrics, axis=0)
+        return {
+            "policy_loss": float(policy_loss),
+            "actor_entropy": float(entropy),
+            "approx_kl": float(approx_kl),
+            "clip_fraction": float(clip_fraction),
+        }
 
     def actor_training_step(self,batch):
         with tf.GradientTape() as tape:
@@ -122,9 +142,17 @@ class PPO:
             )
             probabilities = tf.exp(log_probabilities)
             entropy = -tf.reduce_sum(probabilities * log_probabilities, axis=1)
-            loss = -tf.reduce_mean(objective) - (config.PPO_ENTROPY_COEFFICIENT * tf.reduce_mean(entropy))
+            mean_entropy = tf.reduce_mean(entropy)
+            policy_loss = -tf.reduce_mean(objective)
+            loss = policy_loss - (self.entropy_coefficient * mean_entropy)
         gradients = tape.gradient(loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(gradients, self.actor.trainable_variables))
+        log_ratio = new_log_probs - old_log_probs
+        approx_kl = tf.reduce_mean((ratio - 1.0) - log_ratio)
+        clip_fraction = tf.reduce_mean(
+            tf.cast(tf.abs(ratio - 1.0) > config.PPO_CLIP_EPSILON, tf.float32)
+        )
+        return policy_loss, mean_entropy, approx_kl, clip_fraction
 
     def overall_objective(self, batch):
         states = np.stack([timestep.observed_state for timestep in batch], axis=0)
@@ -157,20 +185,34 @@ class PPO:
         )
         probabilities = tf.exp(log_probabilities)
         entropy = -tf.reduce_sum(probabilities * log_probabilities, axis=1)
-        return tf.reduce_mean(objective) + (config.PPO_ENTROPY_COEFFICIENT * tf.reduce_mean(entropy))
+        return tf.reduce_mean(objective) + (float(self.entropy_coefficient.numpy()) * tf.reduce_mean(entropy))
 
     def critic_training_run(self, processed_timesteps):
         states, _, _, _, reward_to_go = self.timesteps_to_tensors(processed_timesteps)
         indices = np.arange(len(processed_timesteps))
+        losses = []
 
         for _ in range(config.PPO_EPOCHS):
             np.random.shuffle(indices)
             for start in range(0, len(indices), config.PPO_MINIBATCH_SIZE):
                 batch_indices = indices[start:start + config.PPO_MINIBATCH_SIZE]
-                self.critic_training_step_tensors(
+                loss = self.critic_training_step_tensors(
                     tf.gather(states, batch_indices),
                     tf.gather(reward_to_go, batch_indices),
                 )
+                losses.append(float(loss.numpy()))
+
+        predictions = []
+        for start in range(0, len(processed_timesteps), config.PPO_MINIBATCH_SIZE):
+            batch_states = states[start:start + config.PPO_MINIBATCH_SIZE]
+            predictions.extend(tf.squeeze(self.critic(batch_states), axis=1).numpy())
+        targets = reward_to_go.numpy()
+        target_variance = np.var(targets)
+        explained_variance = 0.0 if target_variance < 1e-8 else 1.0 - np.var(targets - predictions) / target_variance
+        return {
+            "value_loss": float(np.mean(losses)),
+            "explained_variance": float(explained_variance),
+        }
 
     def critic_training_step(self, batch):
         with tf.GradientTape() as tape:
@@ -190,6 +232,7 @@ class PPO:
             loss = tf.reduce_mean(tf.square(reward_to_go - predictions))
         gradients = tape.gradient(loss, self.critic.trainable_variables)
         self.critic.optimizer.apply_gradients(zip(gradients, self.critic.trainable_variables))
+        return loss
 
     def timesteps_to_tensors(self, timesteps):
         states = tf.convert_to_tensor(
