@@ -42,7 +42,7 @@
     "flappyrl:validate-training".exec = ''
       cmake -S lib/flappy-bird-env -B lib/flappy-bird-env/build
       cmake --build lib/flappy-bird-env/build --target flappy_env_server flappy_env_vector_server
-      python3 -u training.py \
+      python3 -u -m train.training \
         --epochs 500 \
         --env-backend cpp_vector \
         --rollout-steps 16384 \

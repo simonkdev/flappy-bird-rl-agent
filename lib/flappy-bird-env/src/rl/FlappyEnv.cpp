@@ -1,9 +1,5 @@
 #include <rl/FlappyEnv.hpp>
 
-#include <algorithm>
-#include <cmath>
-#include <limits>
-
 #include <stdexcept>
 
 FlappyEnv::FlappyEnv(const FlappyEnvConfig& config)
@@ -95,33 +91,6 @@ bool FlappyEnv::debugWindowShouldClose() const {
 }
 
 FlappyEnvStepResult FlappyEnv::makeResult(const float reward, const bool passedPipe) {
-	const auto& birdTransform = game.world.getComponent<CaffeineTransformComponent>(game.bird);
-	PipePair* nextPipe = nullptr;
-	float nextPipeX = std::numeric_limits<float>::infinity();
-	for (PipePair* pipePair : game.pipePairs) {
-		if (!pipePair || !pipePair->used || pipePair->scored) {
-			continue;
-		}
-		const float pipeX = game.world.getComponent<CaffeineTransformComponent>(pipePair->bottomPipe).position.x;
-		if (pipeX < nextPipeX) {
-			nextPipe = pipePair;
-			nextPipeX = pipeX;
-		}
-	}
-
-	float nextGapCenterY = 0.0f;
-	float nextGapHalfHeight = 0.0f;
-	if (nextPipe) {
-		const auto& bottomTransform = game.world.getComponent<CaffeineTransformComponent>(nextPipe->bottomPipe);
-		const auto& topTransform = game.world.getComponent<CaffeineTransformComponent>(nextPipe->topPipe);
-		const float bottomPipeTop = bottomTransform.position.y + std::abs(bottomTransform.size.y) / 2.0f;
-		const float topPipeBottom = topTransform.position.y - std::abs(topTransform.size.y) / 2.0f;
-		nextGapCenterY = (bottomPipeTop + topPipeBottom) / 2.0f;
-		nextGapHalfHeight = std::max(
-			0.0f,
-			(topPipeBottom - bottomPipeTop) / 2.0f - std::abs(birdTransform.size.y) / 2.0f);
-	}
-
 	return FlappyEnvStepResult{
 		.observation = &lastObservation,
 		.reward = reward,
@@ -130,11 +99,6 @@ FlappyEnvStepResult FlappyEnv::makeResult(const float reward, const bool passedP
 		.score = game.score,
 		.passedPipe = passedPipe,
 		.simulationTime = game.getSimulationTime(),
-		.hasNextPipe = nextPipe != nullptr,
-		.birdY = birdTransform.position.y,
-		.nextPipeX = nextPipe ? nextPipeX : 0.0f,
-		.nextGapCenterY = nextGapCenterY,
-		.nextGapHalfHeight = nextGapHalfHeight,
 	};
 }
 

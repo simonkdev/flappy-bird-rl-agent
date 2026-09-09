@@ -1,17 +1,13 @@
-from critic import Critic
-from actor import Actor
 from dataclasses import dataclass
-import numpy as np
 import random
-import config
-import sys
-import tensorflow as tf
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "lib/flappy-bird-env/python"))
-from flappy_env import FlappyEnv
-from fast_vector_flappy_env import FastVectorFlappyEnv
-from vector_flappy_env import VectorFlappyEnv
+import numpy as np
+import tensorflow as tf
+
+from . import config
+from .actor import Actor
+from .critic import Critic
+from .environment import FastVectorFlappyEnv, FlappyEnv, VectorFlappyEnv
 
 @dataclass
 class processed_timestep:
@@ -20,7 +16,6 @@ class processed_timestep:
     observed_state: np.ndarray
     action_taken: int
     reward_to_go: float
-    sampled_critic_value: float
 
 @dataclass
 class timestep:
@@ -29,13 +24,11 @@ class timestep:
     sampled_log_probability: float
     reward: float
     sampled_critic_value: float
-    reward_to_go: float
     passed_pipe: bool = False
     terminated: bool = False
     next_critic_value: float = 0.0
 
 class PPO:
-#    name: str = ""
 
     def __init__(self, debug_window=False, show_game_window=False, env_backend=None):
         self.actor: Actor = Actor(num_actions=config.NUM_ACTIONS)
@@ -52,7 +45,6 @@ class PPO:
                 )
                 for _ in range(config.NUM_ENVS)
             ]
-            self.env = self.envs[0]
             self.framestack_buffers = [[] for _ in self.envs]
         else:
             if self.env_backend == "fast":
@@ -70,9 +62,7 @@ class PPO:
             else:
                 raise ValueError(f"Unsupported env_backend: {self.env_backend!r}")
             self.envs = []
-            self.env = None
             self.framestack_buffers = [[] for _ in range(config.NUM_ENVS)]
-        self.framestack_buffer = self.framestack_buffers[0]
         self.last_trajectory_stats = []
         self.last_training_metrics = {}
         self.current_results = None
@@ -87,7 +77,7 @@ class PPO:
         self.entropy_coefficient.assign(float(value))
 
     def training_epoch(self):
-        processed_timesteps = self.sample_run()  # python list, 1D with objects in it
+        processed_timesteps = self.sample_run()
         actor_metrics = self.actor_training_run(processed_timesteps)
         critic_metrics = self.critic_training_run(processed_timesteps)
         self.last_training_metrics = actor_metrics | critic_metrics
@@ -129,12 +119,6 @@ class PPO:
             "early_stop": early_stopped,
         }
 
-    def actor_training_step(self,batch):
-        with tf.GradientTape() as tape:
-            ov_obj = self.overall_objective(batch)
-            loss = 0 - ov_obj
-        self.actor.update(loss, tape)
-
     @tf.function(reduce_retracing=True)
     def actor_training_step_tensors(self, states, actions, old_log_probs, advantages):
         with tf.GradientTape() as tape:
@@ -166,39 +150,6 @@ class PPO:
         )
         return policy_loss, mean_entropy, approx_kl, clip_fraction
 
-    def overall_objective(self, batch):
-        states = np.stack([timestep.observed_state for timestep in batch], axis=0)
-        actions = tf.convert_to_tensor(
-            [timestep.action_taken for timestep in batch],
-            dtype=tf.int32,
-        )
-        old_log_probs = tf.convert_to_tensor(
-            [timestep.sampled_log_probability for timestep in batch],
-            dtype=tf.float32,
-        )
-        advantages = tf.convert_to_tensor(
-            [timestep.advantage for timestep in batch],
-            dtype=tf.float32,
-        )
-
-        logits = self.actor(states)
-        log_probabilities = tf.nn.log_softmax(logits)
-        indices = tf.stack([tf.range(tf.shape(actions)[0]), actions], axis=1)
-        new_log_probs = tf.gather_nd(log_probabilities, indices)
-        ratio = tf.exp(new_log_probs - old_log_probs)
-        clipped_ratio = tf.clip_by_value(
-            ratio,
-            1.0 - config.PPO_CLIP_EPSILON,
-            1.0 + config.PPO_CLIP_EPSILON,
-        )
-        objective = tf.minimum(
-            ratio * advantages,
-            clipped_ratio * advantages,
-        )
-        probabilities = tf.exp(log_probabilities)
-        entropy = -tf.reduce_sum(probabilities * log_probabilities, axis=1)
-        return tf.reduce_mean(objective) + (float(self.entropy_coefficient.numpy()) * tf.reduce_mean(entropy))
-
     def critic_training_run(self, processed_timesteps):
         states, _, _, _, reward_to_go = self.timesteps_to_tensors(processed_timesteps)
         indices = np.arange(len(processed_timesteps))
@@ -225,17 +176,6 @@ class PPO:
             "value_loss": float(np.mean(losses)),
             "explained_variance": float(explained_variance),
         }
-
-    def critic_training_step(self, batch):
-        with tf.GradientTape() as tape:
-            states = np.stack([timestep.observed_state for timestep in batch], axis=0)
-            rtgs = tf.convert_to_tensor(
-                [timestep.reward_to_go for timestep in batch],
-                dtype=tf.float32,
-            )
-            predictions = tf.squeeze(self.critic(states), axis=1)
-            loss = tf.reduce_mean(tf.square(rtgs - predictions))
-        self.critic.update(loss, tape)
 
     @tf.function(reduce_retracing=True)
     def critic_training_step_tensors(self, states, reward_to_go):
@@ -268,12 +208,6 @@ class PPO:
             dtype=tf.float32,
         )
         return states, actions, old_log_probs, advantages, reward_to_go
-
-    def make_batches(self, timesteps):
-        return [
-            timesteps[i:i + config.PPO_MINIBATCH_SIZE]
-            for i in range(0, len(timesteps), config.PPO_MINIBATCH_SIZE)
-        ]
 
     def close(self):
         if self.vector_env is not None:
@@ -311,7 +245,6 @@ class PPO:
                         observed_state=timestep.observed_state,
                         action_taken=timestep.action_taken,
                         reward_to_go=value_target,
-                        sampled_critic_value=timestep.sampled_critic_value,
                     )
                 )
 
@@ -364,7 +297,7 @@ class PPO:
             for i, env in enumerate(self.envs):
                 result = env.finish_step()
                 next_value = 0.0 if result.terminated else self.estimate_next_value(result.observation, i)
-                reward = self.reward_from_transition(self.current_results[i], result)
+                reward = self.reward_from_transition(result)
 
                 active_trajectories[i].append(
                     timestep(
@@ -373,7 +306,6 @@ class PPO:
                         sampled_log_probability=action_log_probs[i],
                         reward=reward,
                         sampled_critic_value=float(values[i]),
-                        reward_to_go=0.0,
                         passed_pipe=result.passed_pipe,
                         terminated=result.terminated,
                         next_critic_value=next_value,
@@ -420,7 +352,7 @@ class PPO:
             next_values = self.estimate_next_values(next_results)
 
             for i, result in enumerate(next_results):
-                reward = self.reward_from_transition(self.current_results[i], result)
+                reward = self.reward_from_transition(result)
 
                 active_trajectories[i].append(
                     timestep(
@@ -429,7 +361,6 @@ class PPO:
                         sampled_log_probability=action_log_probs[i],
                         reward=reward,
                         sampled_critic_value=float(values[i]),
-                        reward_to_go=0.0,
                         passed_pipe=result.passed_pipe,
                         terminated=result.terminated,
                         next_critic_value=float(next_values[i]),
@@ -462,14 +393,7 @@ class PPO:
         })
 
     @staticmethod
-    def navigation_potential(result):
-        if result.terminated or not result.has_next_pipe or result.next_gap_half_height <= 0.0:
-            return 0.0
-        normalized_distance = abs(result.bird_y - result.next_gap_center_y) / result.next_gap_half_height
-        return max(0.0, 1.0 - min(1.0, normalized_distance))
-
-    @classmethod
-    def reward_from_transition(cls, previous_result, result):
+    def reward_from_transition(result):
         if result.terminated:
             base_reward = config.REWARD_DIE
         elif result.passed_pipe:
@@ -477,41 +401,7 @@ class PPO:
         else:
             base_reward = config.REWARD_STD
 
-        shaping_reward = config.REWARD_ALIGNMENT_SHAPING_COEFFICIENT * (
-            config.GAMMA * cls.navigation_potential(result)
-            - cls.navigation_potential(previous_result)
-        )
-        return base_reward + shaping_reward
-
-    def collect_trajectory(self):
-        seed = random.randint(0, 120)
-        result = self.env.reset_result(seed=seed)
-        timesteps = []
-
-        for step in range(config.MAX_NUM_STEPS):
-            pixels = result.observation
-            state = self.framestack(pixels, step)
-            action, action_log_prob = self.decide(state)
-            critic_value = float(self.critic(state[np.newaxis, ...])[0, 0].numpy())
-            next_result = self.env.step_result(action)
-            terminated = next_result.terminated
-            reward = self.reward_from_transition(result, next_result)
-            current_timestep = timestep(
-                observed_state=state,
-                action_taken=action,
-                sampled_log_probability=action_log_prob,
-                reward=reward,
-                sampled_critic_value=critic_value,
-                reward_to_go=0.0,
-                passed_pipe=next_result.passed_pipe,
-                terminated=terminated,
-                next_critic_value=0.0 if terminated else self.estimate_next_value(next_result.observation, 0),
-            )
-            timesteps.append(current_timestep)
-            if terminated:
-                return timesteps
-            result = next_result
-        return timesteps
+        return base_reward
 
     def framestack(self, pixels, step, env_index=0):
         frame = np.frombuffer(pixels, dtype=np.uint8).reshape(
@@ -717,15 +607,3 @@ class PPO:
             "scores": scores,
             "steps": steps,
         }
-
-    def testdump(self):
-        observation = np.random.rand(1, 42, 42, 5)*255
-        print(self.actor(observation))
-        print(self.critic(observation))
-
-if __name__ == "__main__":
-    ppotest = PPO()
-    try:
-        ppotest.testdump()
-    finally:
-        ppotest.close()

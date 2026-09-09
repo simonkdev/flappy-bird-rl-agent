@@ -2,11 +2,10 @@ import argparse
 
 import numpy as np
 
-import config
-from ppo import PPO
-from training import create_checkpoint_managers, restore_checkpoint
-from fast_vector_flappy_env import FastVectorFlappyEnv
-from vector_flappy_env import VectorFlappyEnv
+from src import config
+from src.environment import FastVectorFlappyEnv, VectorFlappyEnv
+from src.ppo import PPO
+from train.training import create_checkpoint_managers, restore_checkpoint
 
 
 def evaluate_seed_batch(ppo, seed_start, episodes, max_steps, target_score, backend):

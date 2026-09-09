@@ -4,10 +4,11 @@ import time
 import warnings
 from pathlib import Path
 
-import config
-from ppo import PPO
 import tensorflow as tf
 from tqdm import tqdm
+
+from src import config
+from src.ppo import PPO
 
 
 def format_float(value):

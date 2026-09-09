@@ -1,11 +1,12 @@
 import tensorflow as tf
 from tensorflow.keras import layers
 
-import config
+from . import config
 
-class Actor(tf.keras.Model):
 
-    def __init__(self, num_actions):
+class Critic(tf.keras.Model):
+
+    def __init__(self):
         super().__init__()
 
         self.cnn = tf.keras.Sequential([
@@ -35,31 +36,19 @@ class Actor(tf.keras.Model):
             activation="relu"
         )
 
-        self.policy = layers.Dense(num_actions)
+        # The critic outputs one value: V(s)
+        self.value = layers.Dense(1)
 
         self.optimizer = tf.keras.optimizers.Adam(
-            learning_rate=config.LEARNING_RATE
+            learning_rate=config.CRITIC_LEARNING_RATE
         )
 
-    def call(self, observation, return_probs=False):
+    def call(self, observation):
         x = tf.cast(observation, tf.float32) / config.PIXEL_SCALE
 
         x = self.cnn(x)
         x = self.fc(x)
 
-        logits = self.policy(x)
+        value = self.value(x)
 
-        if return_probs:
-            return tf.nn.softmax(logits)
-        return logits
-
-
-    def update(self, loss, tape):
-        gradients = tape.gradient(
-            loss,
-            self.trainable_variables
-        )
-
-        self.optimizer.apply_gradients(
-            zip(gradients, self.trainable_variables)
-        )
+        return value

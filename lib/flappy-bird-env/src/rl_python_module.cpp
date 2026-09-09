@@ -45,7 +45,7 @@ PyObject* resultToTuple(const FlappyEnvStepResult& result, const int width, cons
 		return nullptr;
 	}
 
-	PyObject* tuple = PyTuple_New(15);
+	PyObject* tuple = PyTuple_New(10);
 	if (!tuple) {
 		Py_DECREF(observationBytes);
 		return nullptr;
@@ -61,13 +61,8 @@ PyObject* resultToTuple(const FlappyEnvStepResult& result, const int width, cons
 	PyTuple_SET_ITEM(tuple, 7, PyLong_FromLong(result.score));
 	PyTuple_SET_ITEM(tuple, 8, PyBool_FromLong(result.passedPipe));
 	PyTuple_SET_ITEM(tuple, 9, PyFloat_FromDouble(result.simulationTime));
-	PyTuple_SET_ITEM(tuple, 10, PyBool_FromLong(result.hasNextPipe));
-	PyTuple_SET_ITEM(tuple, 11, PyFloat_FromDouble(result.birdY));
-	PyTuple_SET_ITEM(tuple, 12, PyFloat_FromDouble(result.nextPipeX));
-	PyTuple_SET_ITEM(tuple, 13, PyFloat_FromDouble(result.nextGapCenterY));
-	PyTuple_SET_ITEM(tuple, 14, PyFloat_FromDouble(result.nextGapHalfHeight));
 
-	for (Py_ssize_t i = 0; i < 15; ++i) {
+	for (Py_ssize_t i = 0; i < 10; ++i) {
 		if (!PyTuple_GET_ITEM(tuple, i)) {
 			Py_DECREF(tuple);
 			return nullptr;

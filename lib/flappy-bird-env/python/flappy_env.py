@@ -24,11 +24,6 @@ class StepResult:
     score: int
     passed_pipe: bool
     simulation_time: float
-    has_next_pipe: bool
-    bird_y: float
-    next_pipe_x: float
-    next_gap_center_y: float
-    next_gap_half_height: float
 
     @property
     def shape(self) -> tuple[int, int, int]:
@@ -215,11 +210,6 @@ class FlappyEnv:
             score=result[7],
             passed_pipe=result[8],
             simulation_time=result[9],
-            has_next_pipe=result[10],
-            bird_y=result[11],
-            next_pipe_x=result[12],
-            next_gap_center_y=result[13],
-            next_gap_half_height=result[14],
         )
 
     def _start_request(self, command: str) -> None:
@@ -264,13 +254,13 @@ class FlappyEnv:
     @staticmethod
     def _parse_result(line: str, stdout) -> StepResult:
         parts = line.split()
-        if len(parts) != 17 or parts[0] != "OK" or parts[1] not in {"RESET", "STEP"}:
+        if len(parts) != 12 or parts[0] != "OK" or parts[1] not in {"RESET", "STEP"}:
             raise RuntimeError(f"Unexpected server response: {line!r}")
 
         width = int(parts[2])
         height = int(parts[3])
         expected_size = width * height
-        payload_size = int(parts[16])
+        payload_size = int(parts[11])
         if payload_size != expected_size:
             raise RuntimeError(f"Observation header announced {payload_size} bytes, expected {expected_size}")
 
@@ -289,9 +279,4 @@ class FlappyEnv:
             score=int(parts[8]),
             passed_pipe=parts[9] == "1",
             simulation_time=float(parts[10]),
-            has_next_pipe=parts[11] == "1",
-            bird_y=float(parts[12]),
-            next_pipe_x=float(parts[13]),
-            next_gap_center_y=float(parts[14]),
-            next_gap_half_height=float(parts[15]),
         )
