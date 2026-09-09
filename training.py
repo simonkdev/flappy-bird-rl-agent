@@ -156,8 +156,11 @@ def main():
     parser.add_argument("--num-envs", type=int, default=None)
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--ppo-epochs", type=int, default=None)
+    parser.add_argument("--critic-ppo-epochs", type=int, default=None)
     parser.add_argument("--minibatch-size", type=int, default=None)
     parser.add_argument("--target-kl", type=float, default=None)
+    parser.add_argument("--learning-rate", type=float, default=None)
+    parser.add_argument("--critic-learning-rate", type=float, default=None)
     parser.add_argument("--entropy-start", type=float, default=None)
     parser.add_argument("--entropy-end", type=float, default=None)
     parser.add_argument("--entropy-decay-epochs", type=int, default=None)
@@ -182,10 +185,16 @@ def main():
         config.MAX_NUM_STEPS = args.max_steps
     if args.ppo_epochs is not None:
         config.PPO_EPOCHS = args.ppo_epochs
+    if args.critic_ppo_epochs is not None:
+        config.CRITIC_PPO_EPOCHS = args.critic_ppo_epochs
     if args.minibatch_size is not None:
         config.PPO_MINIBATCH_SIZE = args.minibatch_size
     if args.target_kl is not None:
         config.PPO_TARGET_KL = args.target_kl
+    if args.learning_rate is not None:
+        config.LEARNING_RATE = args.learning_rate
+    if args.critic_learning_rate is not None:
+        config.CRITIC_LEARNING_RATE = args.critic_learning_rate
     if args.entropy_start is not None:
         config.PPO_ENTROPY_COEFFICIENT_START = args.entropy_start
     if args.entropy_end is not None:
@@ -214,6 +223,10 @@ def main():
     restored_epoch = 0
     if args.resume_from is not None:
         restored_epoch = restore_checkpoint(ppo, checkpoint, args.resume_from)
+        if args.learning_rate is not None:
+            ppo.actor.optimizer.learning_rate.assign(config.LEARNING_RATE)
+        if args.critic_learning_rate is not None:
+            ppo.critic.optimizer.learning_rate.assign(config.CRITIC_LEARNING_RATE)
     if args.no_checkpoints:
         checkpoint = None
         checkpoint_managers = None

@@ -204,7 +204,7 @@ class PPO:
         indices = np.arange(len(processed_timesteps))
         losses = []
 
-        for _ in range(config.PPO_EPOCHS):
+        for _ in range(config.CRITIC_PPO_EPOCHS):
             np.random.shuffle(indices)
             for start in range(0, len(indices), config.PPO_MINIBATCH_SIZE):
                 batch_indices = indices[start:start + config.PPO_MINIBATCH_SIZE]

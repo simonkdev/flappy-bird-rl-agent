@@ -48,18 +48,21 @@
         --rollout-steps 16384 \
         --num-envs 32 \
         --ppo-epochs 4 \
+        --critic-ppo-epochs 6 \
         --minibatch-size 512 \
-        --target-kl 0.015 \
+        --learning-rate 0.0002 \
+        --critic-learning-rate 0.0002 \
+        --target-kl 0.020 \
         --entropy-start 0.01 \
-        --entropy-end 0.001 \
-        --entropy-decay-epochs 150 \
+        --entropy-end 0.003 \
+        --entropy-decay-epochs 300 \
         --validate-every 10 \
         --validation-episodes 20 \
         --validation-max-steps 10000 \
         --validation-target-score 500 \
-        --checkpoint-dir checkpoints/validate-training \
+        --checkpoint-dir checkpoints/original-reward-stability-from-160 \
         --checkpoint-every 25 \
-        --resume-from checkpoints/validate-training/latest/ckpt-201
+        --resume-from checkpoints/validate-training/best/ckpt-160
     '';
   };
 

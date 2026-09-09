@@ -32,9 +32,14 @@ def main():
     assert PPO.navigation_potential(terminal) == 0.0
 
     shaping_gain = PPO.reward_from_transition(offset, closer) - config.REWARD_STD
-    assert shaping_gain > 0.0
+    expected_shaping_gain = config.REWARD_ALIGNMENT_SHAPING_COEFFICIENT * config.GAMMA * 0.5
+    assert abs(shaping_gain - expected_shaping_gain) < 1e-9
     terminal_reward = PPO.reward_from_transition(centered, terminal)
-    assert terminal_reward < config.REWARD_DIE
+    expected_terminal_reward = (
+        config.REWARD_DIE
+        - config.REWARD_ALIGNMENT_SHAPING_COEFFICIENT
+    )
+    assert abs(terminal_reward - expected_terminal_reward) < 1e-9
     print("reward shaping tests passed")
 
 
