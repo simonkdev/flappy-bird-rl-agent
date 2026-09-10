@@ -156,9 +156,7 @@ class VectorFlappyEnv:
             payload_size += size
             cursor += 10
 
-        payload = self._process.stdout.read(payload_size)
-        if len(payload) != payload_size:
-            raise RuntimeError(f"Observation payload has {len(payload)} bytes, expected {payload_size}")
+        payload = self._read_exact(payload_size)
 
         results = []
         offset = 0
@@ -183,3 +181,19 @@ class VectorFlappyEnv:
             )
 
         return results
+
+    def _read_exact(self, size: int) -> bytes:
+        if not self._process.stdout:
+            raise RuntimeError("flappy_env_vector_server stdout is unavailable")
+
+        payload = bytearray()
+        while len(payload) < size:
+            chunk = self._process.stdout.read(size - len(payload))
+            if not chunk:
+                stderr = self._read_stderr()
+                raise RuntimeError(
+                    "flappy_env_vector_server closed stdout while reading an observation "
+                    f"payload: received {len(payload)} bytes, expected {size}: {stderr}"
+                )
+            payload.extend(chunk)
+        return bytes(payload)

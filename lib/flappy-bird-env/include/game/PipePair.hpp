@@ -1,6 +1,8 @@
 
 #include <caffeine-gl/base.hpp>
 
+#include <random>
+
 struct PipePair {
 	CaffeineWorld& world;
 	CaffeineEntity bottomPipe = world.createEntity();
@@ -11,8 +13,9 @@ struct PipePair {
 	float gapSize;
 	float yOffset;
 	glm::vec2 &gameVelocity;
+	std::mt19937 &randomGenerator;
 
-	PipePair(CaffeineWorld& world, glm::vec2 &gameVelocity) : world(world), gameVelocity(gameVelocity) {
+	PipePair(CaffeineWorld& world, glm::vec2 &gameVelocity, std::mt19937 &randomGenerator) : world(world), gameVelocity(gameVelocity), randomGenerator(randomGenerator) {
 		used = false;
 		scored = false;
 		
@@ -44,8 +47,13 @@ struct PipePair {
 		world.getComponent<CaffeineRenderComponent>(topPipe).visible = true;
 		
 		
-		gapSize = static_cast<float>(rand() % 150 + 1030);
-		yOffset = static_cast<float>(rand() % static_cast<int>(1700 - gapSize)) - 310;
+		std::uniform_int_distribution<int> gapSizeDistribution(1030, 1179);
+		gapSize = static_cast<float>(gapSizeDistribution(randomGenerator));
+
+		std::uniform_int_distribution<int> yOffsetDistribution(
+			-310,
+			1389 - static_cast<int>(gapSize));
+		yOffset = static_cast<float>(yOffsetDistribution(randomGenerator));
 		
 		world.getComponent<CaffeineTransformComponent>(bottomPipe).position = glm::vec2(2000, yOffset);
 		world.getComponent<CaffeineTransformComponent>(topPipe).position = glm::vec2(2000, yOffset + gapSize);

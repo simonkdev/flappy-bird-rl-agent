@@ -1,7 +1,6 @@
 #include <game/FlappyBirdGame.hpp>
 #include <iostream>
 #include <fstream>
-#include <cstdlib>
 
 FlappyBirdGame::FlappyBirdGame(const FlappyBirdGameOptions& options) : options(options) {
 	birdSpawn = glm::vec2(250.0f, 540.0f);
@@ -184,7 +183,7 @@ void FlappyBirdGame::init() {
 	
 
 	for(int i = 0; i < std::size(pipePairs); i++) {
-		pipePairs[i] = new PipePair(world, pipeVelocity);
+		pipePairs[i] = new PipePair(world, pipeVelocity, randomGenerator);
 	}
 }
 
@@ -378,7 +377,7 @@ void FlappyBirdGame::resetGame() {
 }
 
 void FlappyBirdGame::resetGame(const unsigned int seed) {
-	std::srand(seed);
+	randomGenerator.seed(seed);
 	resetGame();
 }
 

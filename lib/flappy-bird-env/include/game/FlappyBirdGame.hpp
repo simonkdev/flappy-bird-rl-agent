@@ -3,6 +3,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <random>
 
 #include <caffeine-gl/base.hpp>
 #include <game/PipePair.hpp>
@@ -60,6 +61,7 @@ public:
 	CaffeineEntity gameOverBackground, gameOverText1, gameOverText2, gameOverText3, gameOverText4;
 
 	std::vector<CaffeineEntity> backgroundEntities;
+	std::mt19937 randomGenerator;
 
 	explicit FlappyBirdGame(const FlappyBirdGameOptions& options = {});
 	~FlappyBirdGame();
