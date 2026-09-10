@@ -48,7 +48,15 @@ def evaluate_seed_batch(ppo, seed_start, episodes, max_steps, target_score, back
         env.close()
 
 
-def evaluate_checkpoint(checkpoint_path, episodes, batch_size, max_steps, target_score, backend):
+def evaluate_checkpoint(
+    checkpoint_path,
+    episodes,
+    batch_size,
+    max_steps,
+    target_score,
+    backend,
+    seed_start,
+):
     ppo = PPO(env_backend=backend)
     try:
         checkpoint, _ = create_checkpoint_managers(ppo, "/tmp/flappyrl-evaluation", 1)
@@ -58,11 +66,11 @@ def evaluate_checkpoint(checkpoint_path, episodes, batch_size, max_steps, target
 
         scores = []
         steps = []
-        for seed_start in range(0, episodes, batch_size):
-            batch_episodes = min(batch_size, episodes - seed_start)
+        for batch_seed_start in range(seed_start, seed_start + episodes, batch_size):
+            batch_episodes = min(seed_start + episodes - batch_seed_start, batch_size)
             batch_scores, batch_steps = evaluate_seed_batch(
                 ppo,
-                seed_start,
+                batch_seed_start,
                 batch_episodes,
                 max_steps,
                 target_score,
@@ -70,7 +78,10 @@ def evaluate_checkpoint(checkpoint_path, episodes, batch_size, max_steps, target
             )
             scores.extend(batch_scores)
             steps.extend(batch_steps)
-            print(f"epoch {epoch}: evaluated seeds {seed_start}-{seed_start + batch_episodes - 1}")
+            print(
+                f"epoch {epoch}: evaluated seeds "
+                f"{batch_seed_start}-{batch_seed_start + batch_episodes - 1}"
+            )
         stats = ppo._summarize_evaluation(scores, steps, target_score)
         return epoch, stats
     finally:
@@ -106,6 +117,7 @@ def main():
     parser.add_argument("--batch-size", type=int, default=20)
     parser.add_argument("--max-steps", type=int, default=10000)
     parser.add_argument("--target-score", type=int, default=500)
+    parser.add_argument("--seed-start", type=int, default=config.VALIDATION_SEED_START)
     parser.add_argument(
         "--env-backend",
         choices=["cpp_vector", "fast"],
@@ -122,6 +134,7 @@ def main():
         args.max_steps,
         args.target_score,
         args.env_backend,
+        args.seed_start,
     )
     candidate_epoch, candidate_stats = evaluate_checkpoint(
         args.candidate,
@@ -130,6 +143,7 @@ def main():
         args.max_steps,
         args.target_score,
         args.env_backend,
+        args.seed_start,
     )
 
     baseline_scores = np.asarray(baseline_stats["scores"], dtype=np.float64)

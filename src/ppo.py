@@ -72,6 +72,7 @@ class PPO:
         self.last_training_metrics = {}
         self.current_results = None
         self.episode_steps = None
+        self.training_seed_rng = random.Random(config.TRAINING_SEED)
         self.entropy_coefficient = tf.Variable(
             config.PPO_ENTROPY_COEFFICIENT_START,
             dtype=tf.float32,
@@ -287,7 +288,7 @@ class PPO:
         active_trajectories = [[] for _ in self.envs]
         if self.current_results is None:
             self.current_results = [
-                env.reset_result(seed=random.randint(0, 120))
+                env.reset_result(seed=self.sample_training_seed())
                 for env in self.envs
             ]
             self.episode_steps = [0 for _ in self.envs]
@@ -333,7 +334,9 @@ class PPO:
                     trajectories.append(active_trajectories[i])
                     self.record_trajectory_stats(active_trajectories[i], result.terminated)
                     active_trajectories[i] = []
-                    self.current_results[i] = env.reset_result(seed=random.randint(0, 120))
+                    self.current_results[i] = env.reset_result(
+                        seed=self.sample_training_seed()
+                    )
                     self.episode_steps[i] = 0
 
         for trajectory in active_trajectories:
@@ -349,7 +352,7 @@ class PPO:
         active_trajectories = [[] for _ in range(config.NUM_ENVS)]
         if self.current_results is None:
             self.current_results = self.vector_env.reset_all([
-                random.randint(0, 120)
+                self.sample_training_seed()
                 for _ in range(config.NUM_ENVS)
             ])
             self.episode_steps = [0 for _ in range(config.NUM_ENVS)]
@@ -390,7 +393,7 @@ class PPO:
                     active_trajectories[i] = []
                     self.current_results[i] = self.vector_env.reset_one(
                         i,
-                        seed=random.randint(0, 120),
+                        seed=self.sample_training_seed(),
                     )
                     self.episode_steps[i] = 0
 
@@ -419,6 +422,12 @@ class PPO:
             base_reward = config.REWARD_STD
 
         return base_reward
+
+    def sample_training_seed(self):
+        return self.training_seed_rng.randint(
+            config.TRAIN_SEED_MIN,
+            config.TRAIN_SEED_MAX,
+        )
 
     def framestack(self, pixels, step, env_index=0):
         frame = np.frombuffer(pixels, dtype=np.uint8).reshape(
@@ -489,10 +498,12 @@ class PPO:
         env_backend="cpp_vector",
         deterministic=True,
         target_score=None,
+        seed_start=None,
     ):
         episodes = episodes or config.VALIDATION_EPISODES
         max_steps = max_steps or config.VALIDATION_MAX_STEPS
         target_score = config.VALIDATION_TARGET_SCORE if target_score is None else target_score
+        seed_start = config.VALIDATION_SEED_START if seed_start is None else seed_start
 
         if env_backend == "fast":
             return self._evaluate_vector_policy(
@@ -505,6 +516,7 @@ class PPO:
                 max_steps,
                 deterministic,
                 target_score,
+                seed_start,
             )
         if env_backend == "cpp_vector":
             return self._evaluate_vector_policy(
@@ -517,6 +529,7 @@ class PPO:
                 max_steps,
                 deterministic,
                 target_score,
+                seed_start,
             )
         if env_backend == "subprocess":
             return self._evaluate_subprocess_policy(
@@ -524,6 +537,7 @@ class PPO:
                 max_steps,
                 deterministic,
                 target_score,
+                seed_start,
             )
         raise ValueError(f"Unsupported validation env_backend: {env_backend!r}")
 
@@ -533,6 +547,7 @@ class PPO:
         max_steps=None,
         deterministic=True,
         target_score=None,
+        seed_start=None,
     ):
         real_stats = self.evaluate_policy(
             episodes=episodes,
@@ -540,6 +555,7 @@ class PPO:
             env_backend="cpp_vector",
             deterministic=deterministic,
             target_score=target_score,
+            seed_start=seed_start,
         )
         fast_stats = self.evaluate_policy(
             episodes=episodes,
@@ -547,6 +563,7 @@ class PPO:
             env_backend="fast",
             deterministic=deterministic,
             target_score=target_score,
+            seed_start=seed_start,
         )
         return {
             "real": real_stats,
@@ -555,10 +572,18 @@ class PPO:
             "step_gap": fast_stats["avg_steps"] - real_stats["avg_steps"],
         }
 
-    def _evaluate_vector_policy(self, env, episodes, max_steps, deterministic, target_score):
+    def _evaluate_vector_policy(
+        self,
+        env,
+        episodes,
+        max_steps,
+        deterministic,
+        target_score,
+        seed_start,
+    ):
         try:
             buffers = [[] for _ in range(episodes)]
-            results = env.reset_all([i for i in range(episodes)])
+            results = env.reset_all([seed_start + i for i in range(episodes)])
             finished = [False for _ in range(episodes)]
             steps = [0 for _ in range(episodes)]
             scores = [0 for _ in range(episodes)]
@@ -594,14 +619,21 @@ class PPO:
         finally:
             env.close()
 
-    def _evaluate_subprocess_policy(self, episodes, max_steps, deterministic, target_score):
+    def _evaluate_subprocess_policy(
+        self,
+        episodes,
+        max_steps,
+        deterministic,
+        target_score,
+        seed_start,
+    ):
         scores = []
         steps = []
         env = FlappyEnv(width=config.OBS_WIDTH, height=config.OBS_HEIGHT)
         try:
             for episode in range(episodes):
                 buffer = []
-                result = env.reset_result(seed=episode)
+                result = env.reset_result(seed=seed_start + episode)
                 score = 0
                 step_count = 0
                 for step in range(max_steps):

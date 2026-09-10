@@ -43,26 +43,33 @@
       cmake -S lib/flappy-bird-env -B lib/flappy-bird-env/build
       cmake --build lib/flappy-bird-env/build --target flappy_env_server flappy_env_vector_server
       python3 -u -m train.training \
-        --epochs 500 \
+        --epochs 200 \
         --env-backend cpp_vector \
         --rollout-steps 16384 \
         --num-envs 32 \
         --ppo-epochs 4 \
-        --critic-ppo-epochs 6 \
+        --critic-ppo-epochs 8 \
         --minibatch-size 512 \
-        --learning-rate 0.0002 \
-        --critic-learning-rate 0.0002 \
-        --target-kl 0.020 \
-        --entropy-start 0.01 \
+        --learning-rate 0.0001 \
+        --critic-learning-rate 0.0005 \
+        --target-kl 0.01 \
+        --gamma 0.995 \
+        --gae-lambda 0.95 \
+        --entropy-start 0.003 \
         --entropy-end 0.003 \
-        --entropy-decay-epochs 300 \
+        --entropy-decay-epochs 1 \
+        --seed 20260912 \
+        --train-seed-min 0 \
+        --train-seed-max 2000000000 \
         --validate-every 10 \
         --validation-episodes 20 \
         --validation-max-steps 10000 \
         --validation-target-score 500 \
-        --checkpoint-dir checkpoints/original-reward-stability-from-160 \
-        --checkpoint-every 25 \
-        --resume-from checkpoints/validate-training/best/ckpt-160
+        --validation-seed-start 3000000000 \
+        --checkpoint-dir checkpoints/spatial-cnn-seed-20260912 \
+        --checkpoint-every 10 \
+        --checkpoint-keep 10 \
+        --resume-from checkpoints/spatial-cnn-seed-20260912/latest/ckpt-150
     '';
   };
 

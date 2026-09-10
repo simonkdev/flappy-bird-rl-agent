@@ -5,8 +5,9 @@ FRAME_STACK = 5
 NUM_ACTIONS = 2
 
 CNN_FILTERS = [32, 64, 64]
-CNN_KERNEL_SIZES = [8, 4, 3]
-CNN_STRIDES = [4, 2, 1]
+# Preserve a 7x7 spatial feature map from 42x42 observations.
+CNN_KERNEL_SIZES = [4, 3, 3]
+CNN_STRIDES = [2, 2, 1]
 
 FC_UNITS = 256
 
@@ -33,12 +34,16 @@ PPO_ROLLOUT_STEPS = 2048
 NUM_ENVS = 32
 # Keep this above the first-pipe horizon; 64-step caps prevent score learning.
 MAX_NUM_STEPS = 300000
+TRAINING_SEED = 12345
+TRAIN_SEED_MIN = 0
+TRAIN_SEED_MAX = 2_000_000_000
 
 # Use the real C++ game simulation by default; "fast" is an opt-in approximation.
 TRAIN_ENV_BACKEND = "cpp_vector"
 VALIDATION_EPISODES = 5
 VALIDATION_MAX_STEPS = 300000
 VALIDATION_TARGET_SCORE = 10000
+VALIDATION_SEED_START = 3_000_000_000
 
 # Reward scale favors actual score progress over merely surviving rollout fragments.
 REWARD_STD = 0.01

@@ -156,6 +156,11 @@ def main():
     parser.add_argument("--rollout-steps", type=int, default=None)
     parser.add_argument("--num-envs", type=int, default=None)
     parser.add_argument("--max-steps", type=int, default=None)
+    parser.add_argument("--gamma", type=float, default=None)
+    parser.add_argument("--gae-lambda", type=float, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--train-seed-min", type=int, default=None)
+    parser.add_argument("--train-seed-max", type=int, default=None)
     parser.add_argument("--ppo-epochs", type=int, default=None)
     parser.add_argument("--critic-ppo-epochs", type=int, default=None)
     parser.add_argument("--minibatch-size", type=int, default=None)
@@ -169,6 +174,7 @@ def main():
     parser.add_argument("--validation-episodes", type=int, default=None)
     parser.add_argument("--validation-max-steps", type=int, default=None)
     parser.add_argument("--validation-target-score", type=int, default=None)
+    parser.add_argument("--validation-seed-start", type=int, default=None)
     parser.add_argument("--validation-backend", choices=["cpp_vector", "fast", "subprocess"], default="cpp_vector")
     parser.add_argument("--validate-sim-mismatch", action="store_true")
     parser.add_argument("--checkpoint-dir", default="checkpoints")
@@ -184,6 +190,16 @@ def main():
         config.NUM_ENVS = args.num_envs
     if args.max_steps is not None:
         config.MAX_NUM_STEPS = args.max_steps
+    if args.gamma is not None:
+        config.GAMMA = args.gamma
+    if args.gae_lambda is not None:
+        config.GAE_LAMBDA = args.gae_lambda
+    if args.seed is not None:
+        config.TRAINING_SEED = args.seed
+    if args.train_seed_min is not None:
+        config.TRAIN_SEED_MIN = args.train_seed_min
+    if args.train_seed_max is not None:
+        config.TRAIN_SEED_MAX = args.train_seed_max
     if args.ppo_epochs is not None:
         config.PPO_EPOCHS = args.ppo_epochs
     if args.critic_ppo_epochs is not None:
@@ -202,6 +218,17 @@ def main():
         config.PPO_ENTROPY_COEFFICIENT_END = args.entropy_end
     if args.entropy_decay_epochs is not None:
         config.PPO_ENTROPY_DECAY_EPOCHS = args.entropy_decay_epochs
+    if args.validation_seed_start is not None:
+        config.VALIDATION_SEED_START = args.validation_seed_start
+
+    if config.TRAIN_SEED_MIN > config.TRAIN_SEED_MAX:
+        parser.error("--train-seed-min cannot exceed --train-seed-max")
+    if not 0.0 < config.GAMMA <= 1.0:
+        parser.error("--gamma must be in (0, 1]")
+    if not 0.0 <= config.GAE_LAMBDA <= 1.0:
+        parser.error("--gae-lambda must be in [0, 1]")
+
+    tf.keras.utils.set_random_seed(config.TRAINING_SEED)
 
     if config.MAX_NUM_STEPS < 128:
         warnings.warn(
@@ -315,6 +342,7 @@ def main():
                         env_backend=args.validation_backend,
                         target_score=args.validation_target_score,
                         deterministic=True,
+                        seed_start=args.validation_seed_start,
                     )
                     stochastic_stats = ppo.evaluate_policy(
                         episodes=args.validation_episodes,
@@ -322,6 +350,7 @@ def main():
                         env_backend=args.validation_backend,
                         target_score=args.validation_target_score,
                         deterministic=False,
+                        seed_start=args.validation_seed_start,
                     )
                     tqdm.write(format_validation(f"validation[{args.validation_backend}:det]", deterministic_stats))
                     tqdm.write(format_validation(f"validation[{args.validation_backend}:sample]", stochastic_stats))
@@ -347,6 +376,7 @@ def main():
                             episodes=args.validation_episodes,
                             max_steps=args.validation_max_steps,
                             target_score=args.validation_target_score,
+                            seed_start=args.validation_seed_start,
                         )
                         tqdm.write(format_validation("validation[real]", mismatch["real"]))
                         tqdm.write(format_validation("validation[fast]", mismatch["fast"]))
