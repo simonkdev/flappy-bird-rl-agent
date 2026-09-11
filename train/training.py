@@ -45,11 +45,11 @@ def format_validation(prefix, stats):
     )
 
 
-def entropy_coefficient_for_epoch(epoch):
+def entropy_coefficient_for_epoch(epoch, decay_start_epoch=1):
     start = config.PPO_ENTROPY_COEFFICIENT_START
     end = config.PPO_ENTROPY_COEFFICIENT_END
     decay_epochs = max(1, config.PPO_ENTROPY_DECAY_EPOCHS)
-    progress = min(1.0, max(0.0, (epoch - 1) / decay_epochs))
+    progress = min(1.0, max(0.0, (epoch - decay_start_epoch) / decay_epochs))
     return start + ((end - start) * progress)
 
 
@@ -170,6 +170,7 @@ def main():
     parser.add_argument("--entropy-start", type=float, default=None)
     parser.add_argument("--entropy-end", type=float, default=None)
     parser.add_argument("--entropy-decay-epochs", type=int, default=None)
+    parser.add_argument("--entropy-decay-start-epoch", type=int, default=1)
     parser.add_argument("--validate-every", type=int, default=0)
     parser.add_argument("--validation-episodes", type=int, default=None)
     parser.add_argument("--validation-max-steps", type=int, default=None)
@@ -269,7 +270,10 @@ def main():
             unit="epoch",
         ) as progress:
             for epoch in progress:
-                entropy_coefficient = entropy_coefficient_for_epoch(epoch)
+                entropy_coefficient = entropy_coefficient_for_epoch(
+                    epoch,
+                    args.entropy_decay_start_epoch,
+                )
                 ppo.set_entropy_coefficient(entropy_coefficient)
                 started = time.perf_counter()
                 processed_timesteps = ppo.training_epoch()
