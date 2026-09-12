@@ -73,6 +73,9 @@ def create_checkpoint_managers(ppo, checkpoint_dir, max_to_keep):
         actor_optimizer=ppo.actor.optimizer,
         critic_optimizer=ppo.critic.optimizer,
         entropy_coefficient=ppo.entropy_coefficient,
+        training_seed_rng=ppo.training_seed_rng,
+        action_rng=ppo.action_rng,
+        shuffle_rng=ppo.shuffle_rng,
     )
     root = Path(checkpoint_dir)
     return checkpoint, {
@@ -110,7 +113,28 @@ def restore_checkpoint(ppo, checkpoint, checkpoint_path):
     ppo.critic.optimizer.build(ppo.critic.trainable_variables)
 
     status = checkpoint.restore(checkpoint_path)
-    status.assert_existing_objects_matched()
+    checkpoint_variables = {
+        name for name, _ in tf.train.list_variables(checkpoint_path)
+    }
+    rng_state_prefixes = (
+        "training_seed_rng/",
+        "action_rng/",
+        "shuffle_rng/",
+    )
+    has_rng_state = all(
+        any(name.startswith(prefix) for name in checkpoint_variables)
+        for prefix in rng_state_prefixes
+    )
+    if has_rng_state:
+        status.assert_existing_objects_matched()
+    else:
+        status.expect_partial()
+        warnings.warn(
+            "Checkpoint predates RNG-state checkpointing; stochastic training "
+            "will restart from the configured seed on this one resume.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     restored_epoch = int(checkpoint.epoch.numpy())
     tqdm.write(f"resumed checkpoint: {checkpoint_path} epoch={restored_epoch}")
     return restored_epoch

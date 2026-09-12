@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import random
 
 import numpy as np
 import tensorflow as tf
@@ -72,7 +71,9 @@ class PPO:
         self.last_training_metrics = {}
         self.current_results = None
         self.episode_steps = None
-        self.training_seed_rng = random.Random(config.TRAINING_SEED)
+        self.training_seed_rng = tf.random.Generator.from_seed(config.TRAINING_SEED)
+        self.action_rng = tf.random.Generator.from_seed(config.TRAINING_SEED + 1)
+        self.shuffle_rng = tf.random.Generator.from_seed(config.TRAINING_SEED + 2)
         self.entropy_coefficient = tf.Variable(
             config.PPO_ENTROPY_COEFFICIENT_START,
             dtype=tf.float32,
@@ -99,7 +100,7 @@ class PPO:
         completed_passes = 0
 
         for _ in range(config.PPO_EPOCHS):
-            np.random.shuffle(indices)
+            indices = self.shuffled_indices(len(processed_timesteps))
             pass_kls = []
             for start in range(0, len(indices), config.PPO_MINIBATCH_SIZE):
                 batch_indices = indices[start:start + config.PPO_MINIBATCH_SIZE]
@@ -164,7 +165,7 @@ class PPO:
         losses = []
 
         for _ in range(config.CRITIC_PPO_EPOCHS):
-            np.random.shuffle(indices)
+            indices = self.shuffled_indices(len(processed_timesteps))
             for start in range(0, len(indices), config.PPO_MINIBATCH_SIZE):
                 batch_indices = indices[start:start + config.PPO_MINIBATCH_SIZE]
                 loss = self.critic_training_step_tensors(
@@ -424,9 +425,24 @@ class PPO:
         return base_reward
 
     def sample_training_seed(self):
-        return self.training_seed_rng.randint(
-            config.TRAIN_SEED_MIN,
-            config.TRAIN_SEED_MAX,
+        return int(self.training_seed_rng.uniform(
+            shape=(),
+            minval=config.TRAIN_SEED_MIN,
+            maxval=config.TRAIN_SEED_MAX + 1,
+            dtype=tf.int64,
+        ).numpy())
+
+    def shuffled_indices(self, size):
+        seed = self.next_stateless_seed(self.shuffle_rng)
+        return tf.random.experimental.stateless_shuffle(tf.range(size), seed).numpy()
+
+    @staticmethod
+    def next_stateless_seed(generator):
+        return generator.uniform(
+            shape=(2,),
+            minval=0,
+            maxval=2**31 - 1,
+            dtype=tf.int32,
         )
 
     def framestack(self, pixels, step, env_index=0):
@@ -474,9 +490,9 @@ class PPO:
     def decide(self, state):
         logits = self.actor(state[np.newaxis, ...])
         log_probabilities = tf.nn.log_softmax(logits)[0]
-        probabilities = tf.exp(log_probabilities).numpy()
-        action = np.random.choice(config.NUM_ACTIONS, p=probabilities)
-        return int(action), float(log_probabilities[action].numpy())
+        seed = self.next_stateless_seed(self.action_rng)
+        action = int(tf.random.stateless_categorical(logits, 1, seed)[0, 0].numpy())
+        return action, float(log_probabilities[action].numpy())
 
     def decide_deterministic(self, state):
         logits = self.actor(state[np.newaxis, ...])
@@ -486,7 +502,11 @@ class PPO:
     def decide_batch(self, states):
         logits = self.actor(np.stack(states, axis=0))
         log_probabilities = tf.nn.log_softmax(logits)
-        actions = tf.cast(tf.squeeze(tf.random.categorical(logits, 1), axis=1), tf.int32)
+        seed = self.next_stateless_seed(self.action_rng)
+        actions = tf.cast(
+            tf.squeeze(tf.random.stateless_categorical(logits, 1, seed), axis=1),
+            tf.int32,
+        )
         indices = tf.stack([tf.range(tf.shape(actions)[0]), actions], axis=1)
         action_log_probs = tf.gather_nd(log_probabilities, indices)
         return actions.numpy().astype(int).tolist(), action_log_probs.numpy().astype(float).tolist()
