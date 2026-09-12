@@ -53,6 +53,18 @@ def entropy_coefficient_for_epoch(epoch, decay_start_epoch=1):
     return start + ((end - start) * progress)
 
 
+def gamma_for_epoch(epoch, start, end=None, curriculum_epochs=0):
+    if end is None or curriculum_epochs <= 0 or start == end:
+        return start
+
+    # Interpolate the effective discounted horizon, not gamma itself.
+    start_horizon = 1.0 / (1.0 - start)
+    end_horizon = 1.0 / (1.0 - end)
+    progress = min(1.0, max(0.0, (epoch - 1) / max(1, curriculum_epochs - 1)))
+    horizon = start_horizon * ((end_horizon / start_horizon) ** progress)
+    return 1.0 - (1.0 / horizon)
+
+
 def create_checkpoint_managers(ppo, checkpoint_dir, max_to_keep):
     checkpoint = tf.train.Checkpoint(
         epoch=tf.Variable(0, dtype=tf.int64, trainable=False),
@@ -157,6 +169,8 @@ def main():
     parser.add_argument("--num-envs", type=int, default=None)
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--gamma", type=float, default=None)
+    parser.add_argument("--gamma-end", type=float, default=None)
+    parser.add_argument("--gamma-curriculum-epochs", type=int, default=0)
     parser.add_argument("--gae-lambda", type=float, default=None)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--train-seed-min", type=int, default=None)
@@ -226,6 +240,12 @@ def main():
         parser.error("--train-seed-min cannot exceed --train-seed-max")
     if not 0.0 < config.GAMMA <= 1.0:
         parser.error("--gamma must be in (0, 1]")
+    if args.gamma_end is not None and not 0.0 < args.gamma_end < 1.0:
+        parser.error("--gamma-end must be in (0, 1) when using a curriculum")
+    if args.gamma_end is not None and args.gamma_curriculum_epochs <= 0:
+        parser.error("--gamma-curriculum-epochs must be positive with --gamma-end")
+    if args.gamma_end is None and args.gamma_curriculum_epochs > 0:
+        parser.error("--gamma-end is required with --gamma-curriculum-epochs")
     if not 0.0 <= config.GAE_LAMBDA <= 1.0:
         parser.error("--gae-lambda must be in [0, 1]")
 
@@ -262,6 +282,7 @@ def main():
     best_validation = None if args.no_checkpoints else load_best_validation(args.checkpoint_dir)
     last_latest_checkpoint_epoch = restored_epoch
     completed_epoch = restored_epoch
+    gamma_start = config.GAMMA
 
     try:
         with tqdm(
@@ -270,6 +291,13 @@ def main():
             unit="epoch",
         ) as progress:
             for epoch in progress:
+                gamma = gamma_for_epoch(
+                    epoch,
+                    gamma_start,
+                    args.gamma_end,
+                    args.gamma_curriculum_epochs,
+                )
+                config.GAMMA = gamma
                 entropy_coefficient = entropy_coefficient_for_epoch(
                     epoch,
                     args.entropy_decay_start_epoch,
@@ -295,6 +323,7 @@ def main():
                     "max_len": summary["max_length"],
                     "avg_pipes": format_float(summary["avg_pipes"]),
                     "done": summary["terminated"],
+                    "gamma": format_float(gamma),
                     "ent_coef": format_float(entropy_coefficient),
                     "ent": format_float(metrics["actor_entropy"]),
                     "kl": format_float(metrics["approx_kl"]),
@@ -314,6 +343,7 @@ def main():
                     f"max_len={summary['max_length']} "
                     f"avg_pipes={summary['avg_pipes']:.3f} "
                     f"terminated={summary['terminated']}/{len(ppo.last_trajectory_stats)} "
+                    f"gamma={gamma:.6f} "
                     f"entropy_coef={entropy_coefficient:.5f} "
                     f"actor_entropy={metrics['actor_entropy']:.4f} "
                     f"approx_kl={metrics['approx_kl']:.5f} "
