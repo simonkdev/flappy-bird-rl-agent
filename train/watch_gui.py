@@ -12,7 +12,8 @@ from src import config
 
 FRAME_SCALE = 10
 STACK_SCALE = 2
-POLL_MILLISECONDS = 30
+POLL_MILLISECONDS = 16
+POLICY_TICKS = 4
 
 
 def ppm_image_data(pixels, width, height):
@@ -49,17 +50,19 @@ class PlaybackWorker(threading.Thread):
 
     def run(self):
         ppo = None
+        playback_env = None
         try:
             import tensorflow as tf
 
+            from src.environment import FlappyEnv
             from src.ppo import PPO
+            from train.playback_microsteps import step_policy_action
             from train.training import create_checkpoint_managers, restore_checkpoint
 
             self.emit("loading", text="Creating environment and restoring checkpoint...")
             ppo = PPO(
                 env_backend="subprocess",
                 num_envs=1,
-                show_game_window=self.native_window,
             )
             checkpoint, _ = create_checkpoint_managers(
                 ppo,
@@ -71,9 +74,17 @@ class PlaybackWorker(threading.Thread):
 
             episode = 1
             seed = self.seed
-            env = ppo.envs[0]
+            # This environment exists only for display.  PPO retains its normal
+            # four-tick decision cadence; the adapter expands each action into
+            # four one-tick calls whose boundary state is equivalent.
+            playback_env = FlappyEnv(
+                width=config.OBS_WIDTH,
+                height=config.OBS_HEIGHT,
+                ticks_per_step=1,
+                show_game_window=self.native_window,
+            )
             while not self.stop_requested.is_set():
-                result = env.reset_result(seed=seed)
+                result = playback_env.reset_result(seed=seed)
                 ppo.framestack_buffers[0].clear()
                 self.emit("log", text=f"episode={episode} seed={seed} reset")
 
@@ -87,13 +98,33 @@ class PlaybackWorker(threading.Thread):
                     action = ppo.decide(state)[0] if self.stochastic else int(
                         tf.argmax(logits[0], axis=0).numpy()
                     )
-                    started = time.monotonic()
-                    result = env.step_result(action)
+
+                    next_frame_deadline = time.monotonic()
+
+                    def present_tick(tick_result):
+                        nonlocal next_frame_deadline
+                        self.emit(
+                            "frame",
+                            pixels=tick_result.observation,
+                            score=tick_result.score,
+                        )
+                        next_frame_deadline += playback_env.dt
+                        remaining = next_frame_deadline - time.monotonic()
+                        if remaining > 0:
+                            self.stop_requested.wait(remaining)
+                        else:
+                            next_frame_deadline = time.monotonic()
+
+                    policy_step = step_policy_action(
+                        playback_env,
+                        action,
+                        POLICY_TICKS,
+                        on_tick=present_tick,
+                    )
+                    result = policy_step.result
                     self.emit(
-                        "frame",
-                        pixels=result.observation,
+                        "stack",
                         stack=[state[..., index].tobytes() for index in range(config.FRAME_STACK)],
-                        score=result.score,
                     )
                     self.emit(
                         "log",
@@ -101,13 +132,10 @@ class PlaybackWorker(threading.Thread):
                             f"episode={episode} step={step} action={action} "
                             f"p(no_flap)={probabilities[0]:.3f} "
                             f"p(flap)={probabilities[1]:.3f} value={value:.2f} "
-                            f"reward={result.reward:.2f} score={result.score} "
+                            f"reward={policy_step.reward:.2f} score={result.score} "
                             f"alive={int(result.alive)}"
                         ),
                     )
-                    remaining = (env.ticks_per_step * env.dt) - (time.monotonic() - started)
-                    if remaining > 0:
-                        self.stop_requested.wait(remaining)
                     if result.terminated:
                         self.emit(
                             "log",
@@ -119,6 +147,8 @@ class PlaybackWorker(threading.Thread):
         except Exception as error:
             self.emit("error", message=str(error))
         finally:
+            if playback_env is not None:
+                playback_env.close()
             if ppo is not None:
                 ppo.close()
             self.emit("stopped")
@@ -319,14 +349,17 @@ class WatchApp:
             self.stop_button.configure(state="disabled")
 
     def append_log(self, text):
+        self.append_logs((text,))
+
+    def append_logs(self, lines):
+        if not lines:
+            return
         self.terminal.configure(state="normal")
-        self.terminal.insert("end", f"{text}\n")
+        self.terminal.insert("end", "".join(f"{line}\n" for line in lines))
         self.terminal.see("end")
         self.terminal.configure(state="disabled")
 
     def update_frame(self, payload):
-        if not self.stack_labels:
-            self.create_stack_labels()
         self.game_image = photo_from_pixels(
             self.root,
             payload["pixels"],
@@ -337,6 +370,10 @@ class WatchApp:
         self.game_label.configure(image=self.game_image)
         self.game_label.place(relx=0.5, rely=0.5, anchor="center")
         self.score.set(f"Score: {payload['score']}")
+
+    def update_stack(self, payload):
+        if not self.stack_labels:
+            self.create_stack_labels()
         for index, pixels in enumerate(payload["stack"]):
             image = photo_from_pixels(
                 self.root,
@@ -359,6 +396,8 @@ class WatchApp:
             self.stack_labels.append(label)
 
     def drain_events(self):
+        latest_frame = None
+        log_lines = []
         try:
             while True:
                 kind, payload = self.events.get_nowait()
@@ -384,14 +423,16 @@ class WatchApp:
                     self.append_log(f"checkpoint restored at epoch={payload['epoch']}")
                 elif kind == "loading":
                     self.status.set(payload["text"])
-                    self.append_log(payload["text"])
+                    log_lines.append(payload["text"])
                 elif kind == "frame":
-                    self.update_frame(payload)
+                    latest_frame = payload
+                elif kind == "stack":
+                    self.update_stack(payload)
                 elif kind == "log":
-                    self.append_log(payload["text"])
+                    log_lines.append(payload["text"])
                 elif kind == "error":
                     self.status.set("Playback failed.")
-                    self.append_log(f"ERROR: {payload['message']}")
+                    log_lines.append(f"ERROR: {payload['message']}")
                 elif kind == "stopped":
                     self.worker = None
                     self.play_button.configure(state="normal")
@@ -400,6 +441,9 @@ class WatchApp:
                         self.status.set("Playback stopped.")
         except queue.Empty:
             pass
+        if latest_frame is not None:
+            self.update_frame(latest_frame)
+        self.append_logs(log_lines)
         self.root.after(POLL_MILLISECONDS, self.drain_events)
 
     def append_loading_error(self, message):
