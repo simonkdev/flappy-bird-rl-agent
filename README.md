@@ -36,7 +36,7 @@ frames and selects one of two actions every four simulation ticks.
 | --- | --- |
 | Input | `42 x 42 x 5` grayscale frame stack |
 | Actions | `0`: no flap, `1`: flap |
-| Policy/value network | Spatial CNN with separate actor and critic heads |
+| Policy/value network | Separate spatial CNN actor and critic models |
 | Optimizer family | PPO with clipped policy updates and KL monitoring |
 | Environment | C++ Flappy Bird simulation, normally 32 parallel environments |
 | Rewards | small survival reward, `+10` per pipe, `-1` on death |
@@ -101,7 +101,8 @@ It restores the post-observation-fix validation winner,
 minibatches, actor/critic learning rates of `2.5e-5`/`2.5e-4`, and a `0.006`
 KL target. The task definition is updated for each new experiment.
 
-For custom runs, inspect `train/training.py --help` and start from the task in
+For custom runs, inspect the available options with
+`devenv shell -- python3 -m train.training --help`, then start from the task in
 `devenv.nix`. Important controls include rollout size, actor/critic learning
 rates, gamma, entropy schedule, KL target, checkpoint directory, and validation
 seed range.
@@ -116,14 +117,15 @@ and verbose telemetry.
 devenv tasks run flappyrl:demo
 ```
 
-The watcher runs TensorFlow during startup and displays a loading screen until
-the runtime is ready. Playback preserves the trained four-tick action cadence
-while rendering intermediate simulation ticks at 60 Hz.
+The watcher requires the native RL servers from the build step above. It runs
+TensorFlow during startup and displays a loading screen until the runtime is
+ready. Playback preserves the trained four-tick action cadence while rendering
+intermediate simulation ticks at 60 Hz.
 
 For a simpler native-window player:
 
 ```bash
-python3 -m train.watch_checkpoint \
+devenv shell -- python3 -m train.watch_checkpoint \
   checkpoints/spatial-cnn-fixed-observation-static-gamma-995-low-actor-lr-entropy-warmup/best/ckpt-290
 ```
 
