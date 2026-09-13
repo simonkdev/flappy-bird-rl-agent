@@ -110,7 +110,6 @@ class PPO:
 
         for _ in range(config.PPO_EPOCHS):
             indices = self.shuffled_indices(len(processed_timesteps))
-            pass_kls = []
             for start in range(0, len(indices), config.PPO_MINIBATCH_SIZE):
                 batch_indices = indices[start:start + config.PPO_MINIBATCH_SIZE]
                 batch_metrics = self.actor_training_step_tensors(
@@ -120,12 +119,12 @@ class PPO:
                     tf.gather(advantages, batch_indices),
                 )
                 metrics.append([float(metric.numpy()) for metric in batch_metrics])
-                pass_kls.append(float(batch_metrics[2].numpy()))
-
-            completed_passes += 1
-            if np.mean(pass_kls) >= config.PPO_TARGET_KL:
-                early_stopped = True
+                if float(batch_metrics[2].numpy()) >= config.PPO_TARGET_KL:
+                    early_stopped = True
+                    break
+            if early_stopped:
                 break
+            completed_passes += 1
 
         policy_loss, entropy, approx_kl, clip_fraction = np.mean(metrics, axis=0)
         return {
@@ -161,10 +160,14 @@ class PPO:
             loss = policy_loss - (self.entropy_coefficient * mean_entropy)
         gradients = tape.gradient(loss, self.actor.trainable_variables)
         self.actor.optimizer.apply_gradients(zip(gradients, self.actor.trainable_variables))
-        log_ratio = new_log_probs - old_log_probs
-        approx_kl = tf.reduce_mean((ratio - 1.0) - log_ratio)
+        updated_logits = self.actor(states)
+        updated_log_probabilities = tf.nn.log_softmax(updated_logits)
+        updated_log_probs = tf.gather_nd(updated_log_probabilities, indices)
+        updated_ratio = tf.exp(updated_log_probs - old_log_probs)
+        updated_log_ratio = updated_log_probs - old_log_probs
+        approx_kl = tf.reduce_mean((updated_ratio - 1.0) - updated_log_ratio)
         clip_fraction = tf.reduce_mean(
-            tf.cast(tf.abs(ratio - 1.0) > config.PPO_CLIP_EPSILON, tf.float32)
+            tf.cast(tf.abs(updated_ratio - 1.0) > config.PPO_CLIP_EPSILON, tf.float32)
         )
         return policy_loss, mean_entropy, approx_kl, clip_fraction
 
