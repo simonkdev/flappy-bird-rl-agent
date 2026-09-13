@@ -19,6 +19,48 @@ def format_optional_float(value):
     return "-" if value is None else f"{value:.5f}"
 
 
+def available_memory_mib(meminfo_path=Path("/proc/meminfo")):
+    try:
+        fields = {}
+        for line in meminfo_path.read_text(encoding="ascii").splitlines():
+            key, value = line.split(":", 1)
+            fields[key] = value.strip().split()[0]
+        return int(fields["MemAvailable"]) // 1024
+    except (OSError, KeyError, ValueError):
+        return None
+
+
+def require_available_memory(minimum_mib):
+    if minimum_mib <= 0:
+        return
+    available_mib = available_memory_mib()
+    if available_mib is None:
+        warnings.warn(
+            "Unable to read host available memory; memory guard is disabled.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return
+    if available_mib < minimum_mib:
+        raise RuntimeError(
+            f"Host available memory is {available_mib} MiB, below the configured "
+            f"{minimum_mib} MiB safety threshold."
+        )
+
+
+def set_oom_score_adj(value):
+    if value is None:
+        return
+    try:
+        Path("/proc/self/oom_score_adj").write_text(f"{value}\n", encoding="ascii")
+    except OSError as error:
+        warnings.warn(
+            f"Unable to set oom_score_adj={value}: {error}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
 def summarize_epoch(stats, elapsed_seconds, num_timesteps):
     rewards = [item["reward"] for item in stats]
     lengths = [item["length"] for item in stats]
@@ -225,6 +267,8 @@ def main():
     parser.add_argument("--checkpoint-keep", type=int, default=3)
     parser.add_argument("--no-checkpoints", action="store_true")
     parser.add_argument("--resume-from", default=None)
+    parser.add_argument("--min-available-memory-mib", type=int, default=0)
+    parser.add_argument("--oom-score-adj", type=int, default=None)
     args = parser.parse_args()
 
     if args.rollout_steps is not None:
@@ -276,7 +320,12 @@ def main():
         parser.error("--gamma-end is required with --gamma-curriculum-epochs")
     if not 0.0 <= config.GAE_LAMBDA <= 1.0:
         parser.error("--gae-lambda must be in [0, 1]")
+    if args.min_available_memory_mib < 0:
+        parser.error("--min-available-memory-mib cannot be negative")
+    if args.oom_score_adj is not None and not -1000 <= args.oom_score_adj <= 1000:
+        parser.error("--oom-score-adj must be in [-1000, 1000]")
 
+    set_oom_score_adj(args.oom_score_adj)
     tf.keras.utils.set_random_seed(config.TRAINING_SEED)
 
     if config.MAX_NUM_STEPS < 128:
@@ -319,6 +368,7 @@ def main():
             unit="epoch",
         ) as progress:
             for epoch in progress:
+                require_available_memory(args.min_available_memory_mib)
                 gamma = gamma_for_epoch(
                     epoch,
                     gamma_start,
@@ -451,6 +501,7 @@ def main():
                             f"score_gap={mismatch['score_gap']:.2f} "
                             f"step_gap={mismatch['step_gap']:.1f}"
                         )
+                require_available_memory(args.min_available_memory_mib)
     finally:
         if checkpoint is not None and completed_epoch > last_latest_checkpoint_epoch:
             save_checkpoint(

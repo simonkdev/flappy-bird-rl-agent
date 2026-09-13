@@ -43,13 +43,13 @@
       cmake -S lib/flappy-bird-env -B lib/flappy-bird-env/build
       cmake --build lib/flappy-bird-env/build --target flappy_env_server flappy_env_vector_server
       python3 -u -m train.training \
-        --epochs 400 \
+        --epochs 310 \
         --env-backend cpp_vector \
         --rollout-steps 16384 \
         --num-envs 32 \
         --ppo-epochs 4 \
         --critic-ppo-epochs 8 \
-        --minibatch-size 512 \
+        --minibatch-size 256 \
         --learning-rate 0.00005 \
         --critic-learning-rate 0.0005 \
         --target-kl 0.01 \
@@ -67,8 +67,11 @@
         --validation-target-score 500 \
         --validation-seed-start 3000000000 \
         --checkpoint-dir checkpoints/spatial-cnn-fixed-observation-static-gamma-995-low-actor-lr-entropy-warmup \
-        --checkpoint-every 10 \
-        --checkpoint-keep 10
+        --checkpoint-every 5 \
+        --checkpoint-keep 10 \
+        --resume-from checkpoints/spatial-cnn-fixed-observation-static-gamma-995-low-actor-lr-entropy-warmup/latest \
+        --min-available-memory-mib 2048 \
+        --oom-score-adj 500
     '';
   };
 
