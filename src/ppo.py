@@ -107,6 +107,8 @@ class PPO:
         metrics = []
         early_stopped = False
         completed_passes = 0
+        max_batch_kl = 0.0
+        stop_batch_kl = None
 
         for _ in range(config.PPO_EPOCHS):
             indices = self.shuffled_indices(len(processed_timesteps))
@@ -119,8 +121,11 @@ class PPO:
                     tf.gather(advantages, batch_indices),
                 )
                 metrics.append([float(metric.numpy()) for metric in batch_metrics])
-                if float(batch_metrics[2].numpy()) >= config.PPO_TARGET_KL:
+                batch_kl = float(batch_metrics[2].numpy())
+                max_batch_kl = max(max_batch_kl, batch_kl)
+                if batch_kl >= config.PPO_TARGET_KL:
                     early_stopped = True
+                    stop_batch_kl = batch_kl
                     break
             if early_stopped:
                 break
@@ -134,6 +139,8 @@ class PPO:
             "clip_fraction": float(clip_fraction),
             "ppo_passes": completed_passes,
             "early_stop": early_stopped,
+            "max_batch_kl": max_batch_kl,
+            "stop_batch_kl": stop_batch_kl,
         }
 
     @tf.function(reduce_retracing=True)

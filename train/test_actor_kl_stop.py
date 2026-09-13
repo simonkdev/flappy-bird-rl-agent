@@ -50,6 +50,8 @@ def main():
         assert metrics["early_stop"]
         assert metrics["ppo_passes"] == 0
         assert metrics["approx_kl"] > config.PPO_TARGET_KL
+        assert abs(metrics["max_batch_kl"] - 0.02) < 1e-6
+        assert abs(metrics["stop_batch_kl"] - 0.02) < 1e-6
     finally:
         ppo.close()
         config.PPO_EPOCHS = original_epochs

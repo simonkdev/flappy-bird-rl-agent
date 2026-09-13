@@ -55,9 +55,9 @@
         --target-kl 0.01 \
         --gamma 0.995 \
         --gae-lambda 0.95 \
-        --entropy-start 0.003 \
+        --entropy-start 0.01 \
         --entropy-end 0.003 \
-        --entropy-decay-epochs 1 \
+        --entropy-decay-epochs 100 \
         --seed 20260912 \
         --train-seed-min 0 \
         --train-seed-max 2000000000 \
@@ -66,7 +66,7 @@
         --validation-max-steps 10000 \
         --validation-target-score 500 \
         --validation-seed-start 3000000000 \
-        --checkpoint-dir checkpoints/spatial-cnn-fixed-observation-static-gamma-995-low-actor-lr \
+        --checkpoint-dir checkpoints/spatial-cnn-fixed-observation-static-gamma-995-low-actor-lr-entropy-warmup \
         --checkpoint-every 10 \
         --checkpoint-keep 10
     '';

@@ -15,6 +15,10 @@ def format_float(value):
     return f"{value:.3f}"
 
 
+def format_optional_float(value):
+    return "-" if value is None else f"{value:.5f}"
+
+
 def summarize_epoch(stats, elapsed_seconds, num_timesteps):
     rewards = [item["reward"] for item in stats]
     lengths = [item["length"] for item in stats]
@@ -351,6 +355,8 @@ def main():
                     "ent_coef": format_float(entropy_coefficient),
                     "ent": format_float(metrics["actor_entropy"]),
                     "kl": format_float(metrics["approx_kl"]),
+                    "max_kl": format_float(metrics["max_batch_kl"]),
+                    "stop_kl": format_optional_float(metrics["stop_batch_kl"]),
                     "clip": format_float(metrics["clip_fraction"]),
                     "ev": format_float(metrics["explained_variance"]),
                     "passes": metrics["ppo_passes"],
@@ -371,6 +377,8 @@ def main():
                     f"entropy_coef={entropy_coefficient:.5f} "
                     f"actor_entropy={metrics['actor_entropy']:.4f} "
                     f"approx_kl={metrics['approx_kl']:.5f} "
+                    f"max_batch_kl={metrics['max_batch_kl']:.5f} "
+                    f"stop_batch_kl={format_optional_float(metrics['stop_batch_kl'])} "
                     f"clip_fraction={metrics['clip_fraction']:.3f} "
                     f"ppo_passes={metrics['ppo_passes']} "
                     f"kl_early_stop={metrics['early_stop']} "
