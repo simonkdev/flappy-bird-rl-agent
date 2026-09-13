@@ -77,15 +77,15 @@ latter is the observation received by the policy.
 ## Train
 
 The maintained training task builds the native servers and resumes the current
-fixed-observation, static-gamma experiment from its latest checkpoint:
+stable long-horizon branch from the validated fixed-observation checkpoint:
 
 ```bash
-devenv tasks run flappyrl:train-fixed-static-gamma
+devenv tasks run flappyrl:train
 ```
 
 Training uses the C++ vector backend with 32 environments and periodic
 deterministic/stochastic validation. Checkpoints are written below
-`checkpoints/`; the task resumes from the latest saved checkpoint.
+`checkpoints/`; the task definition is updated for each new experiment.
 
 For custom runs, inspect `train/training.py --help` and start from the task in
 `devenv.nix`. Important controls include rollout size, actor/critic learning
@@ -99,7 +99,7 @@ or stochastic action selection, then shows the game, exact frame stack, score,
 and verbose telemetry.
 
 ```bash
-python3 -m train.watch_gui
+devenv tasks run flappyrl:demo
 ```
 
 The watcher runs TensorFlow during startup and displays a loading screen until
@@ -131,22 +131,14 @@ for progress signals but do not provide a robust estimate of generalization.
 
 ## Checks
 
-Run the focused Python checks from the devenv shell:
+Run the complete project suite with devenv:
 
 ```bash
-python3 -m train.test_rewards
-python3 -m train.test_gamma_schedule
-python3 -m train.test_memory_guard
-python3 -m train.test_checkpoint_rng
-python3 -m train.test_actor_kl_stop
-python3 -m train.test_playback_microsteps
+devenv test
 ```
 
-The native environment also has interface checks:
-
-```bash
-PYTHONPATH=lib/flappy-bird-env/python python3 lib/flappy-bird-env/python/test_flappy_env_interface.py
-```
+The test command builds the native servers, then runs the PPO, checkpoint,
+playback, single-environment, and vector-environment checks in `test/`.
 
 ## Repository Map
 
@@ -155,8 +147,9 @@ src/                         PPO, actor, critic, configuration, environment adap
 train/training.py            Training loop, validation, checkpointing, memory guard
 train/watch_gui.py           Tkinter checkpoint watcher
 train/compare_checkpoints.py Paired-seed checkpoint evaluation
+test/                        Project test suite
 lib/flappy-bird-env/         C++ game, RL renderer, servers, Python environment API
-devenv.nix                   Development shell and reproducible training task
+devenv.nix                   Development shell, demos, training, and test command
 ```
 
 ## Credits
