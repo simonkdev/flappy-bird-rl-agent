@@ -46,19 +46,19 @@ def main():
 
         ppo.actor_training_step_tensors = training_step
         metrics = ppo.actor_training_run(make_timesteps(6))
-        assert len(calls) == 2
+        assert len(calls) == 3
         assert metrics["early_stop"]
-        assert metrics["ppo_passes"] == 0
+        assert metrics["ppo_passes"] == 1
         assert metrics["approx_kl"] > config.PPO_TARGET_KL
         assert abs(metrics["max_batch_kl"] - 0.02) < 1e-6
-        assert abs(metrics["stop_batch_kl"] - 0.02) < 1e-6
+        assert abs(metrics["stop_pass_kl"] - (0.001 + 0.02 + 0.02) / 3) < 1e-6
     finally:
         ppo.close()
         config.PPO_EPOCHS = original_epochs
         config.PPO_MINIBATCH_SIZE = original_minibatch_size
         config.PPO_TARGET_KL = original_target_kl
 
-    print("actor minibatch KL-stop tests passed")
+    print("actor pass-level KL-stop tests passed")
 
 
 if __name__ == "__main__":

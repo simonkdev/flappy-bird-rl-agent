@@ -356,7 +356,7 @@ def main():
                     "ent": format_float(metrics["actor_entropy"]),
                     "kl": format_float(metrics["approx_kl"]),
                     "max_kl": format_float(metrics["max_batch_kl"]),
-                    "stop_kl": format_optional_float(metrics["stop_batch_kl"]),
+                    "stop_kl": format_optional_float(metrics["stop_pass_kl"]),
                     "clip": format_float(metrics["clip_fraction"]),
                     "ev": format_float(metrics["explained_variance"]),
                     "passes": metrics["ppo_passes"],
@@ -378,7 +378,7 @@ def main():
                     f"actor_entropy={metrics['actor_entropy']:.4f} "
                     f"approx_kl={metrics['approx_kl']:.5f} "
                     f"max_batch_kl={metrics['max_batch_kl']:.5f} "
-                    f"stop_batch_kl={format_optional_float(metrics['stop_batch_kl'])} "
+                    f"stop_pass_kl={format_optional_float(metrics['stop_pass_kl'])} "
                     f"clip_fraction={metrics['clip_fraction']:.3f} "
                     f"ppo_passes={metrics['ppo_passes']} "
                     f"kl_early_stop={metrics['early_stop']} "

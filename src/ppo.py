@@ -108,10 +108,11 @@ class PPO:
         early_stopped = False
         completed_passes = 0
         max_batch_kl = 0.0
-        stop_batch_kl = None
+        stop_pass_kl = None
 
         for _ in range(config.PPO_EPOCHS):
             indices = self.shuffled_indices(len(processed_timesteps))
+            pass_kls = []
             for start in range(0, len(indices), config.PPO_MINIBATCH_SIZE):
                 batch_indices = indices[start:start + config.PPO_MINIBATCH_SIZE]
                 batch_metrics = self.actor_training_step_tensors(
@@ -123,13 +124,13 @@ class PPO:
                 metrics.append([float(metric.numpy()) for metric in batch_metrics])
                 batch_kl = float(batch_metrics[2].numpy())
                 max_batch_kl = max(max_batch_kl, batch_kl)
-                if batch_kl >= config.PPO_TARGET_KL:
-                    early_stopped = True
-                    stop_batch_kl = batch_kl
-                    break
-            if early_stopped:
-                break
+                pass_kls.append(batch_kl)
             completed_passes += 1
+            mean_pass_kl = float(np.mean(pass_kls))
+            if mean_pass_kl >= config.PPO_TARGET_KL:
+                early_stopped = True
+                stop_pass_kl = mean_pass_kl
+                break
 
         policy_loss, entropy, approx_kl, clip_fraction = np.mean(metrics, axis=0)
         return {
@@ -140,7 +141,7 @@ class PPO:
             "ppo_passes": completed_passes,
             "early_stop": early_stopped,
             "max_batch_kl": max_batch_kl,
-            "stop_batch_kl": stop_batch_kl,
+            "stop_pass_kl": stop_pass_kl,
         }
 
     @tf.function(reduce_retracing=True)
