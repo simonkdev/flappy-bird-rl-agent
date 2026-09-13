@@ -1,6 +1,10 @@
+import sys
 from pathlib import Path
 
 import numpy as np
+
+ENV_PYTHON_DIR = Path(__file__).resolve().parents[1] / "lib/flappy-bird-env/python"
+sys.path.insert(0, str(ENV_PYTHON_DIR))
 
 from vector_flappy_env import VectorFlappyEnv
 
@@ -35,7 +39,7 @@ def run_seeded_episode(env, seed, reset_other_env=False):
 
 
 def main():
-    executable = Path(__file__).resolve().parents[1] / "build/flappy_env_vector_server"
+    executable = Path(__file__).resolve().parents[1] / "lib/flappy-bird-env/build/flappy_env_vector_server"
     with VectorFlappyEnv(executable, num_envs=1) as single_env:
         single_observations = run_seeded_episode(single_env, seed=17)
 

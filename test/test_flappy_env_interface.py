@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+ENV_PYTHON_DIR = Path(__file__).resolve().parents[1] / "lib/flappy-bird-env/python"
+sys.path.insert(0, str(ENV_PYTHON_DIR))
 
 from flappy_env import FlappyEnv
 
@@ -14,7 +18,7 @@ def assert_frame(result) -> None:
 
 
 def main() -> None:
-    executable = Path(__file__).resolve().parents[1] / "build/flappy_env_server"
+    executable = Path(__file__).resolve().parents[1] / "lib/flappy-bird-env/build/flappy_env_server"
     with FlappyEnv(executable, seed=99) as env:
         first_reset = env.reset_result(seed=99)
         second_reset = env.reset_result(seed=99)
