@@ -29,14 +29,23 @@ class timestep:
 
 class PPO:
 
-    def __init__(self, debug_window=False, show_game_window=False, env_backend=None):
+    def __init__(
+        self,
+        debug_window=False,
+        show_game_window=False,
+        env_backend=None,
+        num_envs=None,
+    ):
         self.actor: Actor = Actor(num_actions=config.NUM_ACTIONS)
         self.critic: Critic = Critic()
         self.env_backend = env_backend or config.TRAIN_ENV_BACKEND
+        self.num_envs = config.NUM_ENVS if num_envs is None else num_envs
+        if self.num_envs < 1:
+            raise ValueError("num_envs must be positive")
         if (
             debug_window
             or show_game_window
-            or config.NUM_ENVS == 1
+            or self.num_envs == 1
             or self.env_backend == "subprocess"
         ):
             self.vector_env = None
@@ -47,26 +56,26 @@ class PPO:
                     debug_window=debug_window,
                     show_game_window=show_game_window,
                 )
-                for _ in range(config.NUM_ENVS)
+                for _ in range(self.num_envs)
             ]
             self.framestack_buffers = [[] for _ in self.envs]
         else:
             if self.env_backend == "fast":
                 self.vector_env = FastVectorFlappyEnv(
-                    num_envs=config.NUM_ENVS,
+                    num_envs=self.num_envs,
                     width=config.OBS_WIDTH,
                     height=config.OBS_HEIGHT,
                 )
             elif self.env_backend == "cpp_vector":
                 self.vector_env = VectorFlappyEnv(
-                    num_envs=config.NUM_ENVS,
+                    num_envs=self.num_envs,
                     width=config.OBS_WIDTH,
                     height=config.OBS_HEIGHT,
                 )
             else:
                 raise ValueError(f"Unsupported env_backend: {self.env_backend!r}")
             self.envs = []
-            self.framestack_buffers = [[] for _ in range(config.NUM_ENVS)]
+            self.framestack_buffers = [[] for _ in range(self.num_envs)]
         self.last_trajectory_stats = []
         self.last_training_metrics = {}
         self.current_results = None
@@ -350,13 +359,13 @@ class PPO:
     def collect_vector_trajectories(self):
         trajectories = []
         self.last_trajectory_stats = []
-        active_trajectories = [[] for _ in range(config.NUM_ENVS)]
+        active_trajectories = [[] for _ in range(self.num_envs)]
         if self.current_results is None:
             self.current_results = self.vector_env.reset_all([
                 self.sample_training_seed()
-                for _ in range(config.NUM_ENVS)
+                for _ in range(self.num_envs)
             ])
-            self.episode_steps = [0 for _ in range(config.NUM_ENVS)]
+            self.episode_steps = [0 for _ in range(self.num_envs)]
         collected_steps = 0
 
         while collected_steps < config.PPO_ROLLOUT_STEPS:

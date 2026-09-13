@@ -167,8 +167,10 @@ void RlObservationRenderer::renderCpuObservation(FlappyBirdGame& game) {
 }
 
 void RlObservationRenderer::drawCpuQuad(const CaffeineTransformComponent& transform, const std::uint8_t gray) {
-	const float halfWidth = transform.size.x * 0.5f;
-	const float halfHeight = transform.size.y * 0.5f;
+	// Bottom pipes use a negative X scale to mirror their texture. The CPU
+	// rasterizer needs positive geometric extents regardless of texture scale.
+	const float halfWidth = std::abs(transform.size.x) * 0.5f;
+	const float halfHeight = std::abs(transform.size.y) * 0.5f;
 	const float radians = glm::radians(transform.rotation);
 	const float cosTheta = std::cos(radians);
 	const float sinTheta = std::sin(radians);
