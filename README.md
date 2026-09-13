@@ -74,6 +74,15 @@ devenv tasks run flappyrl:libdemo
 This opens the normal game view and the low-resolution observation view. The
 latter is the observation received by the policy.
 
+## Commands
+
+```bash
+devenv tasks run flappyrl:libdemo  # Native game and observation renderer
+devenv tasks run flappyrl:demo     # RL checkpoint watcher GUI
+devenv tasks run flappyrl:train    # Current training branch
+devenv test                        # Complete project suite
+```
+
 ## Train
 
 The maintained training task builds the native servers and resumes the current
@@ -85,7 +94,12 @@ devenv tasks run flappyrl:train
 
 Training uses the C++ vector backend with 32 environments and periodic
 deterministic/stochastic validation. Checkpoints are written below
-`checkpoints/`; the task definition is updated for each new experiment.
+`checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-290`.
+It restores the post-observation-fix validation winner,
+`...entropy-warmup/best/ckpt-290`, then uses a longer discount horizon
+(`gamma=0.997`, `GAE lambda=0.97`) and conservative PPO updates: 512-sample
+minibatches, actor/critic learning rates of `2.5e-5`/`2.5e-4`, and a `0.006`
+KL target. The task definition is updated for each new experiment.
 
 For custom runs, inspect `train/training.py --help` and start from the task in
 `devenv.nix`. Important controls include rollout size, actor/critic learning
