@@ -72,7 +72,7 @@
         --checkpoint-dir checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-540-higher-actor-lr-batched-validation \
         --checkpoint-every 5 \
         --checkpoint-keep 10 \
-        --resume-from checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-290/best/ckpt-540 \
+        --resume-from checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-540-higher-actor-lr-batched-validation/latest/ckpt-660 \
         --min-available-memory-mib 2048 \
         --oom-score-adj 500
     '';
