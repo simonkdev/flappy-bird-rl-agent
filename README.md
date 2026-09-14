@@ -94,8 +94,9 @@ devenv tasks run flappyrl:train
 
 Training uses the C++ vector backend with 32 environments and periodic
 deterministic/stochastic validation over 100 fixed seeds. Checkpoints are
-written below
-`checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-540-higher-actor-lr`.
+evaluated in batches of 20 native environments to control host memory use.
+Checkpoints are written below
+`checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-540-higher-actor-lr-batched-validation`.
 It restores `...stable-long-horizon-from-290/best/ckpt-540`, which beat
 `ckpt-290` on a separate 100-seed evaluation. The branch retains the longer
 discount horizon (`gamma=0.997`, `GAE lambda=0.97`), 512-sample minibatches,

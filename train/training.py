@@ -257,6 +257,7 @@ def main():
     parser.add_argument("--entropy-decay-start-epoch", type=int, default=1)
     parser.add_argument("--validate-every", type=int, default=0)
     parser.add_argument("--validation-episodes", type=int, default=None)
+    parser.add_argument("--validation-batch-size", type=int, default=None)
     parser.add_argument("--validation-max-steps", type=int, default=None)
     parser.add_argument("--validation-target-score", type=int, default=None)
     parser.add_argument("--validation-seed-start", type=int, default=None)
@@ -322,6 +323,8 @@ def main():
         parser.error("--gae-lambda must be in [0, 1]")
     if args.min_available_memory_mib < 0:
         parser.error("--min-available-memory-mib cannot be negative")
+    if args.validation_batch_size is not None and args.validation_batch_size < 1:
+        parser.error("--validation-batch-size must be positive")
     if args.oom_score_adj is not None and not -1000 <= args.oom_score_adj <= 1000:
         parser.error("--oom-score-adj must be in [-1000, 1000]")
 
@@ -459,6 +462,7 @@ def main():
                         target_score=args.validation_target_score,
                         deterministic=True,
                         seed_start=args.validation_seed_start,
+                        batch_size=args.validation_batch_size,
                     )
                     stochastic_stats = ppo.evaluate_policy(
                         episodes=args.validation_episodes,
@@ -467,6 +471,7 @@ def main():
                         target_score=args.validation_target_score,
                         deterministic=False,
                         seed_start=args.validation_seed_start,
+                        batch_size=args.validation_batch_size,
                     )
                     tqdm.write(format_validation(f"validation[{args.validation_backend}:det]", deterministic_stats))
                     tqdm.write(format_validation(f"validation[{args.validation_backend}:sample]", stochastic_stats))

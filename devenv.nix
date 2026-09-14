@@ -65,10 +65,11 @@
         --train-seed-max 2000000000 \
         --validate-every 10 \
         --validation-episodes 100 \
+        --validation-batch-size 20 \
         --validation-max-steps 10000 \
         --validation-target-score 500 \
         --validation-seed-start 3000000000 \
-        --checkpoint-dir checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-540-higher-actor-lr \
+        --checkpoint-dir checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-540-higher-actor-lr-batched-validation \
         --checkpoint-every 5 \
         --checkpoint-keep 10 \
         --resume-from checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-290/best/ckpt-540 \
@@ -89,6 +90,7 @@
     python3 -m test.test_vector_results
     python3 -m test.test_vector_seed_independence
     python3 -m test.test_playback_microsteps
+    python3 -m test.test_validation_batching
   '';
 
 }

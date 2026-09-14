@@ -539,12 +539,41 @@ class PPO:
         deterministic=True,
         target_score=None,
         seed_start=None,
+        batch_size=None,
     ):
         episodes = episodes or config.VALIDATION_EPISODES
         max_steps = max_steps or config.VALIDATION_MAX_STEPS
         target_score = config.VALIDATION_TARGET_SCORE if target_score is None else target_score
         seed_start = config.VALIDATION_SEED_START if seed_start is None else seed_start
+        batch_size = episodes if batch_size is None else batch_size
+        if batch_size < 1:
+            raise ValueError("Evaluation batch size must be positive.")
 
+        scores = []
+        steps = []
+        for offset in range(0, episodes, batch_size):
+            batch_episodes = min(batch_size, episodes - offset)
+            stats = self._evaluate_policy_batch(
+                episodes=batch_episodes,
+                max_steps=max_steps,
+                env_backend=env_backend,
+                deterministic=deterministic,
+                target_score=target_score,
+                seed_start=seed_start + offset,
+            )
+            scores.extend(stats["scores"])
+            steps.extend(stats["steps"])
+        return self._summarize_evaluation(scores, steps, target_score)
+
+    def _evaluate_policy_batch(
+        self,
+        episodes,
+        max_steps,
+        env_backend,
+        deterministic,
+        target_score,
+        seed_start,
+    ):
         if env_backend == "fast":
             return self._evaluate_vector_policy(
                 FastVectorFlappyEnv(
