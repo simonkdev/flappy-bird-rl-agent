@@ -13,10 +13,7 @@ The agent "sees" a 42x42 grayscale version of the rendered game, chooses
 between `no flap` and `flap`, and learns from score progress, survival, and the
 collision signal. 
 
-The main purpose of this project was to learn:
-a) the inner workings and implementation of advanced RL architectures
-b) fine-tuning parameters and multi-stage training in RL
-c) interaction between agent and environment in advanced RL problems
+The main purpose of this project was to learn the inner workings and implementation of advanced RL architectures, fine-tuning parameters and multi-stage training in RL and interaction between agent and environment in advanced RL problems
 
 ## What Is Here
 
