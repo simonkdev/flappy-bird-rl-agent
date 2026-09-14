@@ -52,7 +52,7 @@
         --ppo-epochs 4 \
         --critic-ppo-epochs 8 \
         --minibatch-size 512 \
-        --learning-rate 0.000025 \
+        --learning-rate 0.00005 \
         --critic-learning-rate 0.00025 \
         --target-kl 0.006 \
         --gamma 0.997 \
@@ -64,14 +64,14 @@
         --train-seed-min 0 \
         --train-seed-max 2000000000 \
         --validate-every 10 \
-        --validation-episodes 20 \
+        --validation-episodes 100 \
         --validation-max-steps 10000 \
         --validation-target-score 500 \
         --validation-seed-start 3000000000 \
-        --checkpoint-dir checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-290 \
+        --checkpoint-dir checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-540-higher-actor-lr \
         --checkpoint-every 5 \
         --checkpoint-keep 10 \
-        --resume-from checkpoints/spatial-cnn-fixed-observation-static-gamma-995-low-actor-lr-entropy-warmup/best/ckpt-290 \
+        --resume-from checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-290/best/ckpt-540 \
         --min-available-memory-mib 2048 \
         --oom-score-adj 500
     '';

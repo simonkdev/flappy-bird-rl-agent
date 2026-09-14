@@ -86,20 +86,21 @@ devenv test                        # Complete project suite
 ## Train
 
 The maintained training task builds the native servers and resumes the current
-stable long-horizon branch from the validated fixed-observation checkpoint:
+stable long-horizon branch from its held-out evaluation winner:
 
 ```bash
 devenv tasks run flappyrl:train
 ```
 
 Training uses the C++ vector backend with 32 environments and periodic
-deterministic/stochastic validation. Checkpoints are written below
-`checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-290`.
-It restores the post-observation-fix validation winner,
-`...entropy-warmup/best/ckpt-290`, then uses a longer discount horizon
-(`gamma=0.997`, `GAE lambda=0.97`) and conservative PPO updates: 512-sample
-minibatches, actor/critic learning rates of `2.5e-5`/`2.5e-4`, and a `0.006`
-KL target. The task definition is updated for each new experiment.
+deterministic/stochastic validation over 100 fixed seeds. Checkpoints are
+written below
+`checkpoints/spatial-cnn-fixed-observation-stable-long-horizon-from-540-higher-actor-lr`.
+It restores `...stable-long-horizon-from-290/best/ckpt-540`, which beat
+`ckpt-290` on a separate 100-seed evaluation. The branch retains the longer
+discount horizon (`gamma=0.997`, `GAE lambda=0.97`), 512-sample minibatches,
+and a `0.006` KL target. Its only policy-optimization change is actor learning
+rate `5e-5`; critic learning rate remains `2.5e-4`.
 
 For custom runs, inspect the available options with
 `devenv shell -- python3 -m train.training --help`, then start from the task in
@@ -131,10 +132,11 @@ devenv shell -- python3 -m train.watch_checkpoint \
 
 ## Compare Checkpoints Properly
 
-Use the same deterministic seeds for both candidates:
+Use the same deterministic held-out seeds for both candidates. Both checkpoint
+arguments are required:
 
 ```bash
-python3 -m train.compare_checkpoints \
+devenv shell -- python3 -m train.compare_checkpoints \
   --baseline checkpoints/run-a/best/ckpt-100 \
   --candidate checkpoints/run-b/best/ckpt-120 \
   --episodes 100 \

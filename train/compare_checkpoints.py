@@ -107,11 +107,13 @@ def main():
     )
     parser.add_argument(
         "--baseline",
-        default="checkpoints/validate-training/best/ckpt-180",
+        required=True,
+        help="Checkpoint prefix for the reference policy.",
     )
     parser.add_argument(
         "--candidate",
-        default="checkpoints/validate-training/latest/ckpt-200",
+        required=True,
+        help="Checkpoint prefix for the policy being evaluated.",
     )
     parser.add_argument("--episodes", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=20)
