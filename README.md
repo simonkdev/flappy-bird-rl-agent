@@ -7,12 +7,13 @@
 <p align="center"><strong>Flight Learner with Adaptive Policy</strong></p>
 
 FLAP-1 is a reinforcement-learning experiment that teaches a small spatial CNN
-to play Flappy Bird from a stack of grayscale frames.
-
-The project uses PPO, a C++ Flappy Bird environment, and TensorFlow. The agent
-sees the actual upper and lower pipes as 42x42 grayscale observations, chooses
+to play Flappy Bird from a stack of grayscale frames. It uses PPO, a modified C++ Flappy Bird clone as the environment, and TensorFlow for the actor/critic networks and tf.GradientTape for gradients. 
+The remaining PPO logic and training loop are written from scratch in python. 
+The agent "sees" a 42x42 grayscale version of the rendered game, chooses
 between `no flap` and `flap`, and learns from score progress, survival, and the
-collision signal.
+collision signal. 
+
+The main purpose of this project was to learn the inner workings and implementation of advanced RL architectures, fine-tuning parameters and multi-stage training in RL and interaction between agent and environment in advanced RL problems
 
 ## What Is Here
 
